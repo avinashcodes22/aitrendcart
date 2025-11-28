@@ -11,14 +11,26 @@ const adapters = { meesho, alibaba, indiamart, csv };
 router.get("/sync/:supplier", async (req, res) => {
   const { supplier } = req.params;
   const adapter = adapters[supplier];
-  if (!adapter) return res.status(400).json({ error: "Unknown supplier" });
+
+  if (!adapter || typeof adapter.fetchProducts !== "function") {
+    return res.status(400).json({
+      error: "Unknown supplier or adapter missing fetchProducts",
+    });
+  }
 
   try {
     const products = await adapter.fetchProducts({});
-    res.json({ supplier, count: products.length, sample: products.slice(0, 2) });
+    res.json({
+      supplier,
+      count: products.length,
+      sample: products.slice(0, 2),
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Sync failed", details: err.message });
+    console.error("Sync error for", supplier, err);
+    res.status(500).json({
+      error: "Sync failed",
+      details: err?.message || String(err),
+    });
   }
 });
 

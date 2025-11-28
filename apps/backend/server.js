@@ -1,28 +1,22 @@
-// server.js
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import supplierRoutes from "./routes/suppliers.js"; // 👈 routes import
+import supplierRoutes from "./routes/suppliers.js";
+import aiRoutes from "./routes/ai.js";      // ✅ NEW
 
-// ✅ Load environment variables
 dotenv.config();
 
-// ✅ Create Express app
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Mount routes
 app.use("/api/suppliers", supplierRoutes);
+app.use("/api/ai", aiRoutes);               // ✅ NEW
 
-// 🟢 Debug log to confirm successful route registration
-console.log("✅ Supplier routes registered at /api/suppliers");
-
-// ✅ Health check endpoint (optional)
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
-// ✅ Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Backend running on http://localhost:${PORT}`);
-});
+const port = process.env.PORT || 5000;
+const host = process.env.HOST || "0.0.0.0";
+app.listen(port, host, () =>
+  console.log(`🚀 Backend running on http://${host}:${port}`)
+);

@@ -1,17 +1,39 @@
-export async function fetchProducts(credentials) {
-  throw new Error("fetchProducts() must be implemented by adapter");
-}
+import Product from "../models/Product.js";
 
-export function normalizeProduct(raw, supplier) {
+// ✅ Normalize raw supplier product
+export function normalizeProduct(raw, supplierKey) {
   return {
-    supplier,
+    supplier: supplierKey,
     productId: raw.id || raw.productId || "unknown",
-    name: raw.title || raw.name,
-    price: raw.price || 0,
-    images: raw.images || [],
-    stock: raw.stock || 0,
+    name: raw.title || raw.name || "Untitled product",
+    price: Number(raw.price || 0),
+    images: raw.images
+      ? Array.isArray(raw.images)
+        ? raw.images
+        : [raw.images]
+      : [],
+    stock: Number(raw.stock || 0),
     category: raw.category || "Misc",
     sourceUrl: raw.url || "",
-    createdAt: new Date(),
+  };
+}
+
+// ✅ Save or update products in MongoDB
+export async function upsertProducts(products) {
+  if (!products.length) return { matched: 0, upserted: 0 };
+
+  const ops = products.map((p) => ({
+    updateOne: {
+      filter: { supplier: p.supplier, productId: p.productId },
+      update: { $set: p },
+      upsert: true,
+    },
+  }));
+
+  const result = await Product.bulkWrite(ops);
+
+  return {
+    matched: result.matchedCount || 0,
+    upserted: result.upsertedCount || 0,
   };
 }

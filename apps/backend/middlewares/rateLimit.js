@@ -1,14 +1,69 @@
 import rateLimit from "express-rate-limit";
 
-// For public routes like /api/products
+/* ====================================
+   PUBLIC API LIMITER
+==================================== */
+
 export const publicLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 100,
-  message: "Too many requests, please try again later.",
+
+  windowMs: 15 * 60 * 1000,
+
+  max: 200,
+
+  standardHeaders: true,
+
+  legacyHeaders: false,
+
+  message: {
+    error: "Too many requests. Please try again later."
+  }
+
 });
 
-// For admin / AI / license routes
+/* ====================================
+   ADMIN LIMITER
+==================================== */
+
 export const adminLimiter = rateLimit({
+
   windowMs: 15 * 60 * 1000,
-  max: 500,
+
+  max: 1000,
+
+  standardHeaders: true,
+
+  legacyHeaders: false
+
+});
+
+/* ====================================
+   LOGIN PROTECTION
+==================================== */
+
+export const loginLimiter = rateLimit({
+
+  windowMs: 10 * 60 * 1000,
+
+  max: 20,
+
+  message: {
+    error: "Too many login attempts. Try again later."
+  }
+
+});
+
+/* ====================================
+   ORDER PROTECTION
+==================================== */
+
+export const orderLimiter = rateLimit({
+
+  windowMs: 1 * 60 * 1000,
+
+  max: 30,
+
+  message: {
+    error: "Order rate limit exceeded."
+  }
+
 });

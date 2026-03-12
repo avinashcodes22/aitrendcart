@@ -1,6 +1,6 @@
 import fs from "fs";
 import csv from "csv-parser";
-import { normalizeProduct } from "../adapter-base.js";
+import { normalizeProduct } from "../supplierAdapterBase.js";
 
 export async function fetchProducts(credentials) {
   const results = [];

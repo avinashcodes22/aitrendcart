@@ -1,76 +1,96 @@
-// apps/backend/ai/workers/convertWorker.js
-import { Worker } from "bullmq";
-import IORedis from "ioredis";
-import axios from "axios";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import { Worker } from "bullmq";
+import IORedis from "ioredis";
 import Product from "../../models/Product.js";
+
+import { trackAIFailure } from "../../services/securityMonitor.js";
 
 dotenv.config();
 
-// 🔗 Redis connection (BullMQ requires maxRetriesPerRequest = null)
+/* ===============================
+   DATABASE
+================================ */
+
+await mongoose.connect(process.env.MONGO_URI);
+console.log("✅ Worker MongoDB connected");
+
+/* ===============================
+   REDIS
+================================ */
+
 const connection = new IORedis(
   process.env.REDIS_URL || "redis://127.0.0.1:6379",
-  {
-    maxRetriesPerRequest: null,
-  }
+  { maxRetriesPerRequest: null }
 );
 
-// 🔗 Connect MongoDB in this worker process
-const mongoUri = process.env.MONGO_URI;
+/* ===============================
+   WORKER
+================================ */
 
-mongoose
-  .connect(mongoUri)
-  .then(() => {
-    console.log("✅ [Worker] MongoDB connected");
+const worker = new Worker(
 
-    // 🧠 Create worker only after DB is ready
-    const worker = new Worker(
-      "convert-queue",
-      async (job) => {
-        const { productId, imageUrl, mode } = job.data;
+  "convert-queue",
 
-        console.log("🧠 AI Job started:", job.id, mode);
+  async (job) => {
 
-        // 1) mark product as pending
-        await Product.findByIdAndUpdate(productId, {
-          conversionStatus: "pending",
-          conversionMode: mode,
-        });
+    try {
 
-        // 2) call AI microservice (Replit or other)
-        const res = await axios.post(
-          `${process.env.AI_SERVICE_URL}/generate3d`,
-          { productId, imageUrl, mode },
-          { timeout: 60000 }
-        );
+      const { productId } = job.data;
 
-        const { modelUrl } = res.data;
+      const product =
+        await Product.findById(productId);
 
-        // 3) update product after success
-        await Product.findByIdAndUpdate(productId, {
-          model3dUrl: modelUrl,
-          conversionStatus: "generated",
-        });
+      if (!product)
+        throw new Error("Product not found");
 
-        return { modelUrl };
-      },
-      { connection }
-    );
+      console.log(
+        "⚙️ Generating 3D model:",
+        product.name
+      );
 
-    worker.on("completed", (job) => {
-      console.log(`✅ AI Job ${job.id} completed`);
-    });
+      /* simulate AI processing */
 
-    worker.on("failed", async (job, err) => {
-      console.error(`❌ AI Job ${job?.id} failed`, err.message);
-      if (job?.data?.productId) {
-        await Product.findByIdAndUpdate(job.data.productId, {
-          conversionStatus: "error",
-        });
+      await new Promise(r =>
+        setTimeout(r, 3000)
+      );
+
+      product.model3dUrl =
+        "/models/sample.glb";
+
+      product.conversionStatus =
+        "generated";
+
+      await product.save();
+
+      console.log(
+        "✅ Generated:",
+        product.name
+      );
+
+      return true;
+
+    }
+
+    catch (err) {
+
+      console.error(
+        "❌ AI job failure:",
+        err.message
+      );
+
+      if (global.io) {
+        trackAIFailure(global.io, job);
       }
-    });
-  })
-  .catch((err) => {
-    console.error("❌ [Worker] MongoDB error:", err.message);
-  });
+
+      throw err;
+
+    }
+
+  },
+
+  { connection }
+
+);
+
+console.log("🚀 BullMQ 3D Worker running");

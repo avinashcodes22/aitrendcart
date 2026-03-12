@@ -1,7 +1,7 @@
 // services/suppliers/meesho.js
 // Mock Meesho supplier adapter for local testing
 
-import { normalizeProduct } from "../adapter-base.js";
+import { normalizeProduct } from "../supplierAdapterBase.js";
 
 const mockProducts = [
   {

@@ -22,3 +22,7 @@ Thumbs.db
 
 # Temporary
 coverage/
+
+apps/backend/config/firebase-admin.json
+apps/backend/config/*.json
+apps/backend/.env

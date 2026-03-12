@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import cartApi from "../lib/cartApi";
+import { cartApi } from "../lib/api";
 import { useAuth } from "./AuthContext";
 
 const CartContext = createContext(null);

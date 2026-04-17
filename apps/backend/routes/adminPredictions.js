@@ -7,14 +7,67 @@ import { predictNext } from "../services/aiTrendPredictor.js";
 const router = express.Router();
 
 /* ======================================================
-   GET REAL AI PREDICTIONS
+   GET REAL AI PREDICTIONS (CHART + AI)
    GET /api/admin/predictions
 ====================================================== */
 router.get("/", verifyToken, requireRole("admin"), async (req, res) => {
   try {
+
+    const range = req.query.range || "30d";
+
+    let days = 30;
+    if (range === "7d") days = 7;
+    if (range === "today") days = 1;
+
+    const startDate = new Date(
+      Date.now() - days * 86400000
+    );
+
     /* ===============================
-       GROUP SALES BY PRODUCT
+       TIME SERIES SALES (FOR CHART)
     =============================== */
+
+    const sales = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$createdAt"
+            }
+          },
+          totalSales: { $sum: "$amount" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    const chartData = sales.map((d, i) => {
+
+      const predicted =
+        i > 0
+          ? Math.round(
+              (d.totalSales + sales[i - 1].totalSales) / 2
+            )
+          : d.totalSales;
+
+      return {
+        date: d._id,
+        sales: d.totalSales,
+        predictedSales: predicted
+      };
+
+    });
+
+    /* ===============================
+       PRODUCT AI PREDICTIONS
+    =============================== */
+
     const orders = await Order.find().lean();
 
     const historyMap = {};
@@ -28,28 +81,41 @@ router.get("/", verifyToken, requireRole("admin"), async (req, res) => {
       }
     }
 
-    /* ===============================
-       RUN AI PREDICTION
-    =============================== */
-    const predictions = [];
+    const productPredictions = [];
 
     for (const name in historyMap) {
+
       const predicted = await predictNext(historyMap[name]);
 
-      predictions.push({
+      productPredictions.push({
         name,
         predictedSales: predicted,
         history: historyMap[name],
       });
+
     }
 
-    predictions.sort((a, b) => b.predictedSales - a.predictedSales);
+    productPredictions.sort((a, b) => b.predictedSales - a.predictedSales);
 
-    res.json(predictions.slice(0, 10));
+    /* ===============================
+       FINAL RESPONSE
+    =============================== */
+
+    res.json({
+      success: true,
+      chart: chartData,
+      products: productPredictions.slice(0, 10)
+    });
 
   } catch (err) {
+
     console.error("Prediction error:", err);
-    res.status(500).json({ error: "Prediction failed" });
+
+    res.status(500).json({
+      success: false,
+      error: "Prediction failed"
+    });
+
   }
 });
 

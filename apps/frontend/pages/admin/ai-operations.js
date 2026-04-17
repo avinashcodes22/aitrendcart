@@ -8,15 +8,26 @@ process.env.NEXT_PUBLIC_API_BASE_URL ||
 
 export default function AIOperations(){
 
-const {token} = useAuth();
+const { user } = useAuth(); // ✅ FIXED
 
 const [data,setData] = useState(null);
 const [loading,setLoading] = useState(true);
 const [error,setError] = useState(null);
 
+/* ===============================
+   LOAD DATA
+================================ */
+
 async function load(){
 
+if (!user) {
+  setLoading(false);
+  return;
+}
+
 try{
+
+const token = await user.getIdToken(); // ✅ FIXED
 
 const res = await fetch(
 `${API}/api/admin/ai-operations`,
@@ -26,6 +37,13 @@ Authorization:`Bearer ${token}`
 }
 }
 );
+
+if (!res.ok) {
+  const text = await res.text();
+  console.error("AI operations error:", text);
+  setError("Failed to load AI operations");
+  return;
+}
 
 const d = await res.json();
 
@@ -51,11 +69,13 @@ setLoading(false);
 
 useEffect(()=>{
 
-if(token){
 load();
-}
 
-},[token]);
+},[user]);
+
+/* ===============================
+   UI (UNCHANGED)
+================================ */
 
 if(loading){
 

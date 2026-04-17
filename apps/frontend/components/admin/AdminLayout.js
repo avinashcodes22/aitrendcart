@@ -212,6 +212,7 @@ export default function AdminLayout({ children }) {
           ["AI Strategy","/admin/ai-strategy"],
           ["Investor Mode","/admin/investor-mode"],
           ["AI Operations","/admin/ai-operations"],
+          ["Analytics","/admin/analytics"],
         ].map(([name,path])=>(
           <Link
             key={name}

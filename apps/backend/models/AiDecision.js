@@ -2,60 +2,84 @@ import mongoose from "mongoose";
 
 const aiDecisionSchema = new mongoose.Schema(
 {
-  type:{
-    type:String,
-    required:true
-  },
+type:{
+type:String,
+required:true
+},
 
-  entity:{
-    type:String,
-    required:true
-  },
+entity:{
+type:String,
+required:true
+},
 
-  entityId:{
-    type:String
-  },
+entityId:{
+type:String
+},
 
-  suggestion:{
-    type:Object
-  },
+suggestion:{
+type:Object
+},
 
-  reason:{
-    type:String
-  },
+reason:{
+type:String
+},
 
-  status:{
-    type:String,
-    default:"pending"
-  },
+status:{
+type:String,
+default:"pending"
+},
 
-  /* ===============================
-     APPROVAL INFO
-  =============================== */
+/* ===============================
+APPROVAL INFO
+=============================== */
 
-  approvedBy:{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:"User"
-  },
+approvedBy:{
+type:mongoose.Schema.Types.ObjectId,
+ref:"User"
+},
 
-  approvedAt:Date,
+approvedAt:Date,
 
-  rejectedAt:Date,
+rejectedAt:Date,
 
-  /* ===============================
-     EXECUTION INFO
-  =============================== */
+/* ===============================
+EXECUTION INFO
+=============================== */
 
-  executed:{
-    type:Boolean,
-    default:false
-  },
+executed:{
+type:Boolean,
+default:false
+},
 
-  executedAt:Date
+executedAt:Date,
+
+/* ===============================
+AI LEARNING PERFORMANCE
+=============================== */
+
+performance:{
+totalSales:{
+type:Number,
+default:0
+},
+
+orderCount:{
+  type:Number,
+  default:0
+},
+
+successScore:{
+  type:Number,
+  default:0
+},
+
+evaluatedAt:Date
+
+}
 
 },
 {
-  timestamps:true
+timestamps:true
 }
 );
 

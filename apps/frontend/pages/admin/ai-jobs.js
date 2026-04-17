@@ -8,23 +8,92 @@ const API =
   "http://localhost:5000";
 
 export default function AiJobsPage() {
-  const { token } = useAuth();
+
+  const { user, getFreshToken } = useAuth(); // ✅ FIXED
 
   const [stats, setStats] = useState(null);
   const [failedJobs, setFailedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionLoading, setActionLoading] = useState("");
+  const [actionMsg, setActionMsg] = useState("");
 
   /* ===============================
-     LOAD AI STATUS
+     GET HEADERS (SAFE)
   =============================== */
-  async function loadStats() {
-    if (!token) return;
+
+  async function getHeaders() {
+
+    if (!user) return {};
+
+    const freshToken = await getFreshToken();
+
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${freshToken}`
+    };
+  }
+
+  /* ===============================
+     RUN JOB
+  =============================== */
+
+  async function runJob(endpoint, body = {}) {
+
+    setActionLoading(endpoint);
+    setActionMsg("");
 
     try {
-      const res = await fetch(`${API}/api/admin/ai/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      const res = await fetch(
+        `${API}/api/admin/jobs/${endpoint}`,
+        {
+          method: "POST",
+          headers: await getHeaders(),
+          body: JSON.stringify(body)
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed");
+      }
+
+      setActionMsg(data.message || "Job started");
+
+      loadStats();
+      loadFailed();
+
+    } catch (err) {
+
+      console.error("Job trigger error:", err.message);
+      setActionMsg(err.message);
+
+    } finally {
+
+      setActionLoading("");
+
+    }
+
+  }
+
+  /* ===============================
+     LOAD STATS
+  =============================== */
+
+  async function loadStats() {
+
+    if (!user) return;
+
+    try {
+
+      const res = await fetch(
+        `${API}/api/admin/ai/status`,
+        {
+          headers: await getHeaders()
+        }
+      );
 
       const data = await res.json();
 
@@ -32,29 +101,38 @@ export default function AiJobsPage() {
         throw new Error(data.error || "Failed");
 
       setStats(data);
+
     } catch (err) {
+
       console.error("AI stats error:", err.message);
       setError("Failed to load AI stats");
+
     }
+
   }
 
   /* ===============================
-     LOAD FAILED JOBS (SAFE)
+     LOAD FAILED JOBS
   =============================== */
+
   async function loadFailed() {
-    if (!token) return;
+
+    if (!user) return;
 
     try {
-      const res = await fetch(`${API}/api/admin/ai/failed`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      const res = await fetch(
+        `${API}/api/admin/ai/failed`,
+        {
+          headers: await getHeaders()
+        }
+      );
 
       const data = await res.json();
 
       if (!res.ok)
         throw new Error(data.error || "Failed");
 
-      // 🔐 HARDENED DATA EXTRACTION
       if (Array.isArray(data)) {
         setFailedJobs(data);
       } else if (Array.isArray(data.failed)) {
@@ -64,17 +142,94 @@ export default function AiJobsPage() {
       }
 
       setError("");
+
     } catch (err) {
+
       console.error("AI failed jobs error:", err.message);
       setFailedJobs([]);
       setError("Failed to load failed jobs");
+
     }
 
     setLoading(false);
+
   }
 
+  /* ===============================
+     RETRY / REMOVE
+  =============================== */
+
+  async function retryJob(id) {
+
+    const headers = await getHeaders();
+
+    await fetch(
+      `${API}/api/admin/ai/retry/${id}`,
+      {
+        method: "POST",
+        headers
+      }
+    );
+
+    loadStats();
+    loadFailed();
+
+  }
+
+  async function removeJob(id) {
+
+    const headers = await getHeaders();
+
+    await fetch(
+      `${API}/api/admin/ai/remove/${id}`,
+      {
+        method: "DELETE",
+        headers
+      }
+    );
+
+    loadStats();
+    loadFailed();
+
+  }
+
+  /* ===============================
+     PAUSE / RESUME
+  =============================== */
+
+  async function pauseQueue() {
+
+    const headers = await getHeaders();
+
+    await fetch(`${API}/api/admin/ai/pause`, {
+      method: "POST",
+      headers
+    });
+
+    alert("AI Engine Paused");
+
+  }
+
+  async function resumeQueue() {
+
+    const headers = await getHeaders();
+
+    await fetch(`${API}/api/admin/ai/resume`, {
+      method: "POST",
+      headers
+    });
+
+    alert("AI Engine Resumed");
+
+  }
+
+  /* ===============================
+     INIT
+  =============================== */
+
   useEffect(() => {
-    if (!token) return;
+
+    if (!user) return;
 
     loadStats();
     loadFailed();
@@ -85,84 +240,21 @@ export default function AiJobsPage() {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [token]);
 
-  /* ===============================
-     RETRY JOB
-  =============================== */
-  async function retryJob(id) {
-    try {
-      await fetch(`${API}/api/admin/ai/retry/${id}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      loadStats();
-      loadFailed();
-    } catch (err) {
-      console.error("Retry error:", err.message);
-    }
-  }
-
-  /* ===============================
-     REMOVE JOB
-  =============================== */
-  async function removeJob(id) {
-    try {
-      await fetch(`${API}/api/admin/ai/remove/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      loadStats();
-      loadFailed();
-    } catch (err) {
-      console.error("Remove error:", err.message);
-    }
-  }
-
-  /* ===============================
-     PAUSE / RESUME
-  =============================== */
-  async function pauseQueue() {
-    await fetch(`${API}/api/admin/ai/pause`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    alert("AI Engine Paused");
-  }
-
-  async function resumeQueue() {
-    await fetch(`${API}/api/admin/ai/resume`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    alert("AI Engine Resumed");
-  }
+  }, [user]);
 
   return (
     <AdminGuard>
       <AdminLayout>
+
         <div className="p-6 text-white max-w-6xl mx-auto space-y-8">
 
-          {/* TITLE */}
-          <div>
-            <h1 className="text-3xl font-bold text-cyan-400">
-              🤖 AI Engine Control Panel
-            </h1>
-            <p className="text-white/60">
-              Monitor AI conversion jobs and queue
-            </p>
-          </div>
+          <h1 className="text-3xl font-bold text-cyan-400">
+            🤖 AI Engine Control Panel
+          </h1>
 
-          {/* ERROR */}
-          {error && (
-            <div className="text-red-400">
-              {error}
-            </div>
-          )}
+          {error && <div className="text-red-400">{error}</div>}
 
-          {/* STATS */}
           {stats && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <StatCard title="Waiting" value={stats.waiting} />
@@ -172,73 +264,51 @@ export default function AiJobsPage() {
             </div>
           )}
 
-          {/* ACTIONS */}
-          <div className="flex gap-4">
-            <button
-              onClick={pauseQueue}
-              className="bg-red-500 px-4 py-2 rounded"
-            >
+          <div className="flex flex-wrap gap-4">
+
+            <button onClick={pauseQueue} className="bg-red-500 px-4 py-2 rounded">
               Pause AI
             </button>
 
-            <button
-              onClick={resumeQueue}
-              className="bg-green-500 px-4 py-2 rounded"
-            >
+            <button onClick={resumeQueue} className="bg-green-500 px-4 py-2 rounded">
               Resume AI
             </button>
+
+            <button
+              onClick={() =>
+                runJob("run-convert", {
+                  productId: "692a87de86d7777cd1f42d2b"
+                })
+              }
+              className="bg-cyan-500 px-4 py-2 rounded"
+            >
+              Run 3D Conversion
+            </button>
+
+            <button
+              onClick={() => runJob("run-trend-scan")}
+              className="bg-purple-500 px-4 py-2 rounded"
+            >
+              Run Trend Scan
+            </button>
+
+            <button
+              onClick={() => runJob("run-trend-predict")}
+              className="bg-yellow-500 px-4 py-2 rounded"
+            >
+              Run Trend Prediction
+            </button>
+
           </div>
 
-          {/* FAILED JOBS */}
-          <div>
-            <h2 className="text-xl font-bold mb-4">
-              Failed Jobs
-            </h2>
-
-            {loading && <p>Loading...</p>}
-
-            {!loading && failedJobs.length === 0 && (
-              <p className="text-white/60">
-                No failed jobs 🎉
-              </p>
-            )}
-
-            <div className="space-y-4">
-              {Array.isArray(failedJobs) &&
-                failedJobs.map((j) => (
-                  <div
-                    key={j.id || j._id}
-                    className="border border-white/10 rounded-xl p-4"
-                  >
-                    <div className="font-semibold">
-                      Job #{j.id || j._id}
-                    </div>
-
-                    <div className="text-sm text-red-400">
-                      {j.failedReason || "Unknown error"}
-                    </div>
-
-                    <div className="flex gap-3 mt-3">
-                      <button
-                        onClick={() => retryJob(j.id)}
-                        className="bg-cyan-500 px-3 py-1 rounded text-sm"
-                      >
-                        Retry
-                      </button>
-
-                      <button
-                        onClick={() => removeJob(j.id)}
-                        className="bg-gray-600 px-3 py-1 rounded text-sm"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
+          {actionMsg && (
+            <div className="bg-black/40 border border-cyan-500/20 p-3 rounded">
+              {actionMsg}
             </div>
-          </div>
+          )}
 
         </div>
+
       </AdminLayout>
     </AdminGuard>
   );
@@ -246,7 +316,7 @@ export default function AiJobsPage() {
 
 function StatCard({ title, value }) {
   return (
-    <div className="bg-black/40 border border-cyan-500/20 rounded-xl p-5 glow-card">
+    <div className="bg-black/40 border border-cyan-500/20 rounded-xl p-5">
       <div className="text-white/60 text-sm">{title}</div>
       <div className="text-2xl font-bold text-cyan-400 mt-2">
         {value ?? 0}

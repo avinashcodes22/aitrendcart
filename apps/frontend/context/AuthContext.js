@@ -5,28 +5,78 @@ import { auth } from "../lib/firebase";
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
+
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  /* =========================
+     GET FRESH TOKEN (SAFE)
+  ========================= */
+
+  async function getFreshToken() {
+
+    if (!auth.currentUser) return null;
+
+    try {
+      return await auth.currentUser.getIdToken(true);
+    } catch (err) {
+      console.error("Token error:", err);
+      return null;
+    }
+
+  }
+
+  /* =========================
+     AUTO REFRESH TOKEN
+  ========================= */
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const t = await user.getIdToken();
-        setToken(t);
-      } else {
-        setToken(null);
-      }
+
+    let refreshInterval;
+
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+
+      setUser(currentUser);
       setLoading(false);
+
+      /* 🔁 AUTO REFRESH EVERY 50 MIN */
+      if (currentUser) {
+
+        refreshInterval = setInterval(async () => {
+          try {
+            await currentUser.getIdToken(true);
+          } catch (err) {
+            console.error("Auto refresh failed:", err);
+          }
+        }, 50 * 60 * 1000);
+
+      }
+
     });
 
-    return () => unsub();
+    return () => {
+      unsub();
+      if (refreshInterval) clearInterval(refreshInterval);
+    };
+
   }, []);
 
+  /* =========================
+     CONTEXT VALUE
+  ========================= */
+
   return (
-    <AuthContext.Provider value={{ token, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        getFreshToken,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
+
 }
 
 export const useAuth = () => useContext(AuthContext);

@@ -1,65 +1,79 @@
 import Product from "../models/Product.js";
 
 /* ======================================================
-   DYNAMIC PRICING AI ENGINE
+DYNAMIC PRICING AI ENGINE
 ====================================================== */
 
 export async function dynamicPricing() {
-  try {
-    const products = await Product.find().lean();
 
-    const suggestions = [];
-    const seen = new Set();
+try {
 
-    for (const p of products) {
-      if (!p.slug) continue;
+const products = await Product.find().lean();
 
-      /* ===============================
-         REMOVE DUPLICATES
-      =============================== */
+const suggestions = [];
+const seen = new Set();
 
-      if (seen.has(p.slug)) continue;
-      seen.add(p.slug);
+for (const p of products) {
 
-      const price = p.price ?? 0;
-      const views = p.arViews ?? 0;
+  if (!p.slug) continue;
 
-      let suggestedPrice = price;
+  /* ===============================
+     REMOVE DUPLICATES
+  =============================== */
 
-      /* ===============================
-         PRICING LOGIC
-      =============================== */
+  if (seen.has(p.slug)) continue;
 
-      if (views > 50) {
-        suggestedPrice = Math.round(price * 1.1);
-      }
+  seen.add(p.slug);
 
-      if (views < 10) {
-        suggestedPrice = Math.round(price * 0.9);
-      }
+  const price = p.price ?? 0;
+  const views = p.arViews ?? 0;
 
-      /* ===============================
-         ONLY IF CHANGE NEEDED
-      =============================== */
+  if (price <= 0) continue;
 
-      if (suggestedPrice !== price) {
-        suggestions.push({
-          productId: p._id,
-          productName: p.name,
-          oldPrice: price,
-          suggestedPrice,
-        });
-      }
-    }
+  let suggestedPrice = price;
 
-    /* ===============================
-       LIMIT RESULTS
-    =============================== */
+  /* ===============================
+     PRICING LOGIC
+  =============================== */
 
-    return suggestions.slice(0, 5);
-
-  } catch (err) {
-    console.error("Dynamic Pricing AI error:", err);
-    return [];
+  if (views > 50) {
+    suggestedPrice = Math.round(price * 1.1);
   }
+
+  if (views < 10) {
+    suggestedPrice = Math.round(price * 0.9);
+  }
+
+  /* ===============================
+     ONLY IF CHANGE NEEDED
+  =============================== */
+
+  if (suggestedPrice !== price) {
+
+    suggestions.push({
+      productId: p._id,
+      productName: p.name,
+      oldPrice: price,
+      newPrice: suggestedPrice
+    });
+
+  }
+
+}
+
+/* ===============================
+   LIMIT RESULTS
+=============================== */
+
+return suggestions.slice(0, 5);
+
+}
+catch (err) {
+
+console.error("Dynamic Pricing AI error:", err);
+
+return [];
+
+}
+
 }

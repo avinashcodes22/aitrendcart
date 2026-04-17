@@ -1,66 +1,117 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+
 import AdminGuard from "../../components/admin/AdminGuard";
 import AdminLayout from "../../components/admin/AdminLayout";
-import { useAuth } from "../../context/AuthContext";
-import AdminPredictionChart from "../../components/admin/AdminPredictionChart";
-import SupplierGraph from "../../components/admin/SupplierGraph";
 
+import { useAuth } from "../../context/AuthContext";
+
+import AdminPredictionChart from "../../components/admin/AdminPredictionChart";
+import AdminTopPredictions from "../../components/admin/AdminTopPredictions"; // ✅ NEW
+
+import SupplierGraph from "../../components/admin/SupplierGraph";
+import WorkerStatusCard from "../../components/admin/WorkerStatusCard";
+import AIExecutionCard from "../../components/admin/AIExecutionCard";
+
+import { adminApi, adminAI } from "../../lib/api";
+
+/* ===============================
+   DYNAMIC 3D LOAD
+=============================== */
 const Trend3D = dynamic(
   () => import("../../components/admin/AdminTrend3D"),
   { ssr: false }
 );
 
-const API =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://localhost:5000";
-
 export default function AdminDashboard() {
-  const { token } = useAuth();
 
-  const [stats, setStats] = useState(null);
+  const { user, loading: authLoading } = useAuth();
+
+  const [stats, setStats] = useState({});
+  const [aiHealth, setAiHealth] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   /* ===============================
-     LOAD ADMIN STATS
+     LOAD AI SYSTEM
   =============================== */
-  async function loadStats() {
-    if (!token) return;
+
+  async function loadAISystem() {
 
     try {
-      const res = await fetch(
-        `${API}/api/admin/stats`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
 
-      const data = await res.json();
+      const health = await adminAI.healthLogs();
 
-      if (!res.ok)
-        throw new Error(data.error || "Failed");
+      const parsed =
+        health?.data ||
+        health;
 
-      setStats(data);
-      setError("");
+      setAiHealth(parsed || {});
+
     } catch (err) {
-      setError("Failed to load stats");
+
+      console.error("AI system load error", err);
+      setAiHealth({});
+
     }
 
-    setLoading(false);
   }
 
+  /* ===============================
+     LOAD STATS
+  =============================== */
+
+  async function loadStats() {
+
+    try {
+
+      const data = await adminApi.stats();
+
+      const parsed =
+        data?.stats ||
+        data?.data ||
+        data;
+
+      setStats(parsed || {});
+      setError("");
+
+    } catch (err) {
+
+      console.error(err);
+      setError("Failed to load stats");
+
+    } finally {
+
+      setLoading(false);
+
+    }
+
+  }
+
+  /* =============================== */
+
   useEffect(() => {
+
+    if (authLoading) return;
+
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     loadStats();
+    loadAISystem();
 
     const interval = setInterval(() => {
       loadStats();
+      loadAISystem();
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [token]);
+
+  }, [user, authLoading]);
+
+  /* =============================== */
 
   if (loading)
     return (
@@ -87,9 +138,10 @@ export default function AdminDashboard() {
   return (
     <AdminGuard>
       <AdminLayout>
+
         <div className="space-y-10 text-white">
 
-          {/* TITLE */}
+          {/* HEADER */}
           <div>
             <h1 className="text-3xl font-bold text-cyan-400">
               AItrendcart Control Center
@@ -99,27 +151,46 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          {/* KPI CARDS */}
+          {/* KPI */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard
-              title="Products"
-              value={stats?.totalProducts}
-            />
-            <StatCard
-              title="Orders Today"
-              value={stats?.ordersToday}
-            />
-            <StatCard
-              title="Suppliers Active"
-              value={stats?.activeSuppliers}
-            />
-            <StatCard
-              title="AI Jobs Running"
-              value={stats?.aiJobsRunning}
-            />
+            <StatCard title="Products" value={stats?.totalProducts} />
+            <StatCard title="Orders Today" value={stats?.ordersToday} />
+            <StatCard title="Suppliers Active" value={stats?.activeSuppliers} />
+            <StatCard title="AI Jobs Running" value={stats?.aiJobsRunning} />
           </div>
 
-          {/* 3D TREND HEATMAP */}
+          {/* AI SYSTEM */}
+          <Card>
+            <SectionTitle title="AI System Status" />
+
+            <div className="grid md:grid-cols-3 gap-6">
+
+              <WorkerStatusCard />
+              <AIExecutionCard />
+
+              <div className="bg-black/40 border border-cyan-500/20 rounded-xl p-5">
+                <div className="text-cyan-400 font-semibold mb-2">
+                  AI Health
+                </div>
+
+                <div className="text-sm text-white/70">
+                  Worker: {aiHealth?.worker ?? "unknown"}
+                </div>
+
+                <div className="text-sm text-white/70">
+                  Decisions: {aiHealth?.decisions ?? 0}
+                </div>
+
+                <div className="text-sm text-white/70">
+                  Jobs Failed: {aiHealth?.failed ?? 0}
+                </div>
+
+              </div>
+
+            </div>
+          </Card>
+
+          {/* 3D TREND */}
           <Card>
             <SectionTitle title="AI Trend Heatmap" />
             <div className="h-[420px]">
@@ -127,35 +198,26 @@ export default function AdminDashboard() {
             </div>
           </Card>
 
-          {/* AI PREDICTION CHART */}
+          {/* PREDICTION */}
           <Card>
             <SectionTitle title="AI Sales Prediction" />
             <AdminPredictionChart />
           </Card>
 
-          {/* SUPPLIER GRAPH */}
+          {/* 🔥 NEW SECTION */}
+          <Card>
+            <SectionTitle title="Top AI Predicted Products" />
+            <AdminTopPredictions />
+          </Card>
+
+          {/* SUPPLIERS */}
           <Card>
             <SectionTitle title="Supplier Performance" />
             <SupplierGraph />
           </Card>
 
-          {/* QUICK ACTIONS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <QuickCard
-              title="Sync Suppliers"
-              link="/admin/suppliers"
-            />
-            <QuickCard
-              title="Run AI 2D→3D"
-              link="/admin/ai-jobs"
-            />
-            <QuickCard
-              title="License Scanner"
-              link="/admin/license"
-            />
-          </div>
-
         </div>
+
       </AdminLayout>
     </AdminGuard>
   );
@@ -165,10 +227,8 @@ export default function AdminDashboard() {
 
 function StatCard({ title, value }) {
   return (
-    <div className="bg-black/40 border border-cyan-500/20 rounded-xl p-5 glow-card">
-      <div className="text-white/60 text-sm">
-        {title}
-      </div>
+    <div className="bg-black/40 border border-cyan-500/20 rounded-xl p-5">
+      <div className="text-white/60 text-sm">{title}</div>
       <div className="text-2xl font-bold text-cyan-400 mt-2">
         {value ?? 0}
       </div>
@@ -178,7 +238,7 @@ function StatCard({ title, value }) {
 
 function Card({ children }) {
   return (
-    <div className="bg-black/40 border border-cyan-500/20 rounded-xl p-6 glow-card">
+    <div className="bg-black/40 border border-cyan-500/20 rounded-xl p-6">
       {children}
     </div>
   );
@@ -189,18 +249,5 @@ function SectionTitle({ title }) {
     <div className="font-bold text-cyan-400 mb-4 text-lg">
       {title}
     </div>
-  );
-}
-
-function QuickCard({ title, link }) {
-  return (
-    <a
-      href={link}
-      className="bg-black/40 border border-cyan-500/20 rounded-xl p-5 hover:scale-105 transition glow-card"
-    >
-      <div className="font-semibold text-cyan-400">
-        {title}
-      </div>
-    </a>
   );
 }

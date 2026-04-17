@@ -1,574 +1,332 @@
-import { useEffect, useState } from "react";
+import { useEffect,useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../context/AuthContext";
 
 const API =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://localhost:5000";
+process.env.NEXT_PUBLIC_API_BASE_URL ||
+"http://localhost:5000";
 
-export default function Revenue() {
+export default function Revenue(){
 
-  const { token } = useAuth();
+const { user } = useAuth(); // ✅ FIXED
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+const [data,setData] = useState(null);
+const [loading,setLoading] = useState(true);
 
-  const [runningHarvester, setRunningHarvester] = useState(false);
-  const [runningSupplierAI, setRunningSupplierAI] = useState(false);
+const [runningHarvester,setRunningHarvester] = useState(false);
+const [runningSupplierAI,setRunningSupplierAI] = useState(false);
 
-  /* =================================
-     LOAD REVENUE DATA
-  ================================= */
+/* ===============================
+   HELPER (VERY IMPORTANT)
+================================ */
 
-  async function load() {
+async function callAPI(endpoint, method="POST") {
+
+  if (!user) return;
+
+  try {
+
+    const token = await user.getIdToken();
+
+    const res = await fetch(`${API}${endpoint}`,{
+      method,
+      headers:{
+        Authorization:`Bearer ${token}`
+      }
+    });
+
+    let data = null;
 
     try {
-
-      const res = await fetch(
-        `${API}/api/admin/revenue-insights`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-      const d = await res.json();
-
-      setData(d);
-
-    } catch (err) {
-
-      console.error("Revenue load error:", err);
-
+      data = await res.json();
+    } catch {
+      alert("Server error");
+      return null;
     }
 
-    setLoading(false);
+    if (!res.ok) {
+      alert(data?.error || "Request failed");
+      return null;
+    }
+
+    return data;
+
+  } catch (err) {
+
+    console.error(err);
+    alert("Server error");
+    return null;
+
   }
 
-  async function runMarketingAI(){
+}
 
-  const res = await fetch(
-    `${API}/api/admin/run-marketing-ai`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
+/* ===============================
+   LOAD DATA
+================================ */
 
-  const data = await res.json();
+async function load(){
 
-  alert(data.message || "Marketing AI finished");
+if (!user) {
+  setLoading(false);
+  return;
+}
+
+try {
+
+const token = await user.getIdToken();
+
+const res = await fetch(
+`${API}/api/admin/revenue-insights`,
+{
+headers:{
+Authorization:`Bearer ${token}`
+}
+}
+);
+
+let d = null;
+
+try {
+  d = await res.json();
+} catch {
+  setData({});
+  return;
+}
+
+if (!res.ok) {
+  console.error(d);
+  setData({});
+  return;
+}
+
+setData(d);
+
+} catch (err) {
+
+console.error("Revenue load error:",err);
+setData({});
 
 }
+
+setLoading(false);
+
+}
+
+/* ===============================
+   ALL AI ACTIONS (CLEANED)
+================================ */
+
+async function runMarketingAI(){
+  const data = await callAPI("/api/admin/run-marketing-ai");
+  if(data) alert(data.message || "Marketing AI finished");
+}
+
 async function runPricingAI(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-pricing-ai`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(data.message || "Pricing AI finished");
-
+  const data = await callAPI("/api/admin/run-pricing-ai");
+  if(data) alert(data.message || "Pricing AI finished");
 }
 
 async function runGrowthAI(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-growth-ai`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(data.message || "Growth engine finished");
-
+  const data = await callAPI("/api/admin/run-growth-ai");
+  if(data) alert(data.message || "Growth engine finished");
 }
+
 async function runFraudDetection(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-fraud-detection`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(data.message || "Fraud detection completed");
-
+  const data = await callAPI("/api/admin/run-fraud-detection");
+  if(data) alert(data.message || "Fraud detection completed");
 }
+
 async function runCustomerAI(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-customer-ai`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(data.message || "Customer intelligence completed");
-
+  const data = await callAPI("/api/admin/run-customer-ai");
+  if(data) alert(data.message || "Customer intelligence completed");
 }
+
 async function runStoreManager(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-store-manager`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(data.message || "Store manager completed");
-
+  const data = await callAPI("/api/admin/run-store-manager");
+  if(data) alert(data.message || "Store manager completed");
 }
 
 async function runViralPredictor(){
+  const data = await callAPI("/api/admin/run-viral-predictor");
+  if(data) alert(`Viral predictions: ${data.predictions}`);
+}
 
-  const res = await fetch(
-    `${API}/api/admin/run-viral-predictor`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
+async function runTrendHarvester(){
 
-  const data = await res.json();
+setRunningHarvester(true);
 
-  alert(`Viral predictions: ${data.predictions}`);
+const data = await callAPI("/api/admin/harvest-trends");
+
+if(data) alert(data.message || "Trend harvesting completed");
+
+setRunningHarvester(false);
 
 }
-  /* =================================
-     RUN TREND HARVESTER
-  ================================= */
 
-  async function runTrendHarvester() {
-
-    try {
-
-      setRunningHarvester(true);
-
-      const res = await fetch(
-        `${API}/api/admin/harvest-trends`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-      const result = await res.json();
-
-      alert(result.message || "Trend harvesting completed");
-
-    } catch (err) {
-
-      console.error("Trend harvester error:", err);
-      alert("Trend harvesting failed");
-
-    }
-
-    setRunningHarvester(false);
-  }
-
-  async function scanTrends(){
-
-  const res = await fetch(
-    `${API}/api/admin/scan-trends`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(data.message || "Trend scan completed");
-
+async function scanTrends(){
+  const data = await callAPI("/api/admin/scan-trends");
+  if(data) alert(data.message || "Trend scan completed");
 }
 
 async function runDemandForecast(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-demand-forecast`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(`Demand alerts: ${data.alerts}`);
-
+  const data = await callAPI("/api/admin/run-demand-forecast");
+  if(data) alert(`Demand alerts: ${data.alerts}`);
 }
 
 async function runCompetitorScan(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-competitor-intel`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(`Competitor alerts: ${data.alerts}`);
-
+  const data = await callAPI("/api/admin/run-competitor-intel");
+  if(data) alert(`Competitor alerts: ${data.alerts}`);
 }
 
 async function runGrowthStrategy(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-growth-strategy`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(`Growth strategies: ${data.strategies}`);
-
-}
-
-async function runMarketingAI(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-marketing-ai`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert(`Marketing campaigns suggested: ${data.campaigns}`);
-
-}
-
-async function runStoreManager(){
-
-  const res = await fetch(
-    `${API}/api/admin/run-store-manager`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
-
-  const data = await res.json();
-
-  alert("AI Store Manager completed");
-
+  const data = await callAPI("/api/admin/run-growth-strategy");
+  if(data) alert(`Growth strategies: ${data.strategies}`);
 }
 
 async function runBehaviorAnalysis(){
+  const data = await callAPI("/api/admin/run-behavior-analysis");
+  if(data) alert(`Behavior insights: ${data.insights}`);
+}
 
-  const res = await fetch(
-    `${API}/api/admin/run-behavior-analysis`,
-    {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    }
-  );
+async function runSupplierAI(){
 
-  const data = await res.json();
+setRunningSupplierAI(true);
 
-  alert(`Behavior insights: ${data.insights}`);
+const data = await callAPI("/api/admin/analyze-suppliers");
+
+if(data) alert(data.message || "Supplier analysis finished");
+
+setRunningSupplierAI(false);
 
 }
 
-  /* =================================
-     RUN SUPPLIER INTELLIGENCE
-  ================================= */
+/* =============================== */
 
-  async function runSupplierAI() {
+useEffect(()=>{
+load();
+},[user]);
 
-    try {
+/* =============================== */
 
-      setRunningSupplierAI(true);
+if(loading){
+return(
+<AdminLayout>
+<div className="p-6 text-white/60">
+Loading revenue insights...
+</div>
+</AdminLayout>
+);
+}
 
-      const res = await fetch(
-        `${API}/api/admin/analyze-suppliers`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+return(
 
-      const result = await res.json();
+<AdminLayout>
 
-      alert(result.message || "Supplier analysis finished");
+<div className="p-6">
 
-    } catch (err) {
+<h1 className="text-2xl font-bold text-cyan-400 mb-6">
+AI Revenue Command Center
+</h1>
 
-      console.error("Supplier AI error:", err);
-      alert("Supplier analysis failed");
+<div className="grid md:grid-cols-4 gap-6">
 
-    }
+<div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
+<p className="text-white/60">Revenue Today</p>
+<p className="text-2xl font-bold">₹{data?.revenueToday || 0}</p>
+</div>
 
-    setRunningSupplierAI(false);
-  }
+<div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
+<p className="text-white/60">Orders Today</p>
+<p className="text-2xl font-bold">{data?.ordersToday || 0}</p>
+</div>
 
-  useEffect(() => {
+<div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
+<p className="text-white/60">Top Product</p>
+<p className="text-lg">{data?.topProduct?.name || "None"}</p>
+</div>
 
-    if (token) {
-      load();
-    }
+<div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
+<p className="text-white/60">Low Stock Risk</p>
+<p className="text-2xl text-red-400">{data?.lowStock || 0}</p>
+</div>
 
-  }, [token]);
+</div>
 
-  /* =================================
-     LOADING STATE
-  ================================= */
+{/* AI OPERATIONS PANEL */}
 
-  if (loading) {
-    return (
-      <AdminLayout>
-        <div className="p-6 text-white/60">
-          Loading revenue insights...
-        </div>
-      </AdminLayout>
-    );
-  }
+<div className="mt-12">
 
-  return (
+<h2 className="text-xl text-purple-400 mb-6">
+AI Operations
+</h2>
 
-    <AdminLayout>
+<div className="flex gap-4 flex-wrap">
 
-      <div className="p-6">
+<button onClick={runTrendHarvester} className="bg-purple-600 px-5 py-2 rounded-lg text-white">
+Run AI Trend Harvester
+</button>
 
-        <h1 className="text-2xl font-bold text-cyan-400 mb-6">
-          AI Revenue Command Center
-        </h1>
-
-        {/* =================================
-            REVENUE DASHBOARD CARDS
-        ================================= */}
-
-        <div className="grid md:grid-cols-4 gap-6">
-
-          <div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
-            <p className="text-white/60">Revenue Today</p>
-            <p className="text-2xl font-bold">
-              ₹{data?.revenueToday || 0}
-            </p>
-          </div>
-
-          <div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
-            <p className="text-white/60">Orders Today</p>
-            <p className="text-2xl font-bold">
-              {data?.ordersToday || 0}
-            </p>
-          </div>
-
-          <div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
-            <p className="text-white/60">Top Product</p>
-            <p className="text-lg">
-              {data?.topProduct?.name || "None"}
-            </p>
-          </div>
-
-          <div className="bg-black/40 p-4 rounded-xl border border-cyan-500/20">
-            <p className="text-white/60">Low Stock Risk</p>
-            <p className="text-2xl text-red-400">
-              {data?.lowStock || 0}
-            </p>
-          </div>
-
-        </div>
-
-        {/* =================================
-            AI OPERATIONS PANEL
-        ================================= */}
-
-        <div className="mt-12">
-
-          <h2 className="text-xl text-purple-400 mb-6">
-            AI Operations
-          </h2>
-
-          <div className="flex gap-4 flex-wrap">
-
-            {/* TREND HARVESTER */}
-
-            <button
-              onClick={runTrendHarvester}
-              disabled={runningHarvester}
-              className="bg-purple-600 hover:bg-purple-700 px-5 py-2 rounded-lg text-white"
-            >
-              {runningHarvester
-                ? "Running Trend Harvester..."
-                : "Run AI Trend Harvester"}
-            </button>
-
-            <button
-onClick={runMarketingAI}
-className="bg-pink-600 hover:bg-pink-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runMarketingAI} className="bg-pink-600 px-5 py-2 rounded-lg text-white">
 Run Marketing AI
 </button>
 
-<button
-onClick={runGrowthAI}
-className="bg-yellow-600 hover:bg-yellow-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runGrowthAI} className="bg-yellow-600 px-5 py-2 rounded-lg text-white">
 Run Growth Engine
 </button>
 
-<button
-onClick={runPricingAI}
-className="bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runPricingAI} className="bg-green-600 px-5 py-2 rounded-lg text-white">
 Run Pricing AI
 </button>
 
-<button
-onClick={runFraudDetection}
-className="bg-red-600 hover:bg-red-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runFraudDetection} className="bg-red-600 px-5 py-2 rounded-lg text-white">
 Run Fraud Detection
 </button>
 
-<button
-onClick={runCustomerAI}
-className="bg-indigo-600 hover:bg-indigo-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runCustomerAI} className="bg-indigo-600 px-5 py-2 rounded-lg text-white">
 Run Customer Intelligence
 </button>
-<button
-onClick={runStoreManager}
-className="bg-orange-600 hover:bg-orange-700 px-5 py-2 rounded-lg text-white ml-4"
->
+
+<button onClick={runStoreManager} className="bg-orange-600 px-5 py-2 rounded-lg text-white">
 Run Store Manager
 </button>
 
-<button
-onClick={scanTrends}
-className="bg-pink-600 hover:bg-pink-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={scanTrends} className="bg-pink-600 px-5 py-2 rounded-lg text-white">
 Scan Global Trends
 </button>
 
-<button
-onClick={runDemandForecast}
-className="bg-yellow-600 hover:bg-yellow-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runDemandForecast} className="bg-yellow-600 px-5 py-2 rounded-lg text-white">
 Run Demand Forecast
 </button>
 
-<button
-onClick={runViralPredictor}
-className="bg-red-600 hover:bg-red-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runViralPredictor} className="bg-red-600 px-5 py-2 rounded-lg text-white">
 Predict Viral Products
 </button>
 
-<button
-onClick={runCompetitorScan}
-className="bg-indigo-600 hover:bg-indigo-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runCompetitorScan} className="bg-indigo-600 px-5 py-2 rounded-lg text-white">
 Scan Competitors
 </button>
 
-<button
-onClick={runBehaviorAnalysis}
-className="bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runBehaviorAnalysis} className="bg-green-600 px-5 py-2 rounded-lg text-white">
 Analyze Customer Behavior
 </button>
 
-<button
-onClick={runMarketingAI}
-className="bg-pink-600 hover:bg-pink-700 px-5 py-2 rounded-lg text-white ml-4"
->
-Run Marketing AI
-</button>
-
-<button
-onClick={runGrowthStrategy}
-className="bg-purple-600 hover:bg-purple-700 px-5 py-2 rounded-lg text-white ml-4"
->
+<button onClick={runGrowthStrategy} className="bg-purple-600 px-5 py-2 rounded-lg text-white">
 Run Growth Strategy
 </button>
 
-<button
-onClick={runStoreManager}
-className="bg-cyan-600 hover:bg-cyan-700 px-5 py-2 rounded-lg text-white ml-4"
->
-Run AI Store Manager
+<button onClick={runSupplierAI} className="bg-blue-600 px-5 py-2 rounded-lg text-white">
+Run Supplier Intelligence
 </button>
-            {/* SUPPLIER INTELLIGENCE */}
 
-            <button
-              onClick={runSupplierAI}
-              disabled={runningSupplierAI}
-              className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg text-white"
-            >
-              {runningSupplierAI
-                ? "Running Supplier Intelligence..."
-                : "Run Supplier Intelligence"}
-            </button>
+</div>
 
-          </div>
+</div>
 
-        </div>
+</div>
 
-      </div>
+</AdminLayout>
 
-    </AdminLayout>
-
-  );
+);
 
 }

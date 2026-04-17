@@ -1,50 +1,107 @@
 import express from "express";
 import IORedis from "ioredis";
+
 import { verifyToken } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 
 const router = express.Router();
 
-const connection = new IORedis(
-process.env.REDIS_URL || "redis://127.0.0.1:6379"
+/* ====================================
+   REDIS CONNECTION
+==================================== */
+
+const redis = new IORedis(
+  process.env.REDIS_URL || "redis://127.0.0.1:6379",
+  {
+    maxRetriesPerRequest: null
+  }
 );
 
+/* ====================================
+   WORKER STATUS
+   GET /api/admin/worker-status
+==================================== */
+
 router.get(
-"/worker-status",
-verifyToken,
-requireRole("admin"),
-async(req,res)=>{
+  "/worker-status",
+  verifyToken,
+  requireRole("admin"),
+  async (req, res) => {
 
-try{
+    try {
 
-const data = await connection.get("ai_worker_status");
+      const raw = await redis.get("ai_worker_status");
 
-if(!data){
-return res.json({
-status:"offline"
-});
-}
+      /* ===============================
+         NO DATA
+      =============================== */
 
-const worker = JSON.parse(data);
+      if (!raw) {
+        return res.json({
+          status: "offline",
+          processedJobs: 0,
+          lastHeartbeat: null
+        });
+      }
 
-const lastSeen =
-Date.now() - worker.lastHeartbeat;
+      let worker;
 
-res.json({
-status:lastSeen < 15000 ? "online" : "offline",
-processedJobs:worker.processedJobs,
-lastHeartbeat:worker.lastHeartbeat
-});
+      try {
+        worker = JSON.parse(raw);
+      }
+      catch (parseError) {
 
-}
-catch(err){
+        console.error(
+          "Worker status parse error:",
+          parseError.message
+        );
 
-res.status(500).json({
-error:"Worker status failed"
-});
+        return res.json({
+          status: "offline",
+          processedJobs: 0,
+          lastHeartbeat: null
+        });
+      }
 
-}
+      /* ===============================
+         HEARTBEAT CHECK
+      =============================== */
 
-});
+      const lastHeartbeat = worker.lastHeartbeat || 0;
+
+      const lastSeen =
+        Date.now() - lastHeartbeat;
+
+      const online =
+        lastSeen < 15000; // 15 seconds
+
+      res.json({
+
+        status: online ? "online" : "offline",
+
+        processedJobs:
+          worker.processedJobs || 0,
+
+        lastHeartbeat:
+          lastHeartbeat || null
+
+      });
+
+    }
+    catch (err) {
+
+      console.error(
+        "Worker status error:",
+        err.message
+      );
+
+      res.status(500).json({
+        error: "Worker status failed"
+      });
+
+    }
+
+  }
+);
 
 export default router;

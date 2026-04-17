@@ -7,7 +7,8 @@ const API =
   "http://localhost:5000";
 
 export default function ProductDiscovery() {
-  const { token } = useAuth();
+
+  const { user } = useAuth();
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,49 +18,75 @@ export default function ProductDiscovery() {
   =============================== */
 
   async function loadDiscovery() {
+
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try {
+
+      const token = await user.getIdToken();
+
       const res = await fetch(`${API}/api/admin/discovery`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Discovery API error:", text);
-        setLoading(false);
+      let data = null;
+
+      try {
+        data = await res.json();
+      } catch {
+        console.error("Invalid JSON response");
+        setProducts([]);
         return;
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        console.error("Discovery API error:", data);
+        setProducts([]);
+        return;
+      }
 
-      /* ===============================
-         FIX: READ PRODUCTS CORRECTLY
-      =============================== */
+      console.log("🔥 DISCOVERY DATA:", data);
 
-      if (data.success) {
+      if (data?.success) {
         setProducts(data.products || []);
+      } else if (Array.isArray(data)) {
+        setProducts(data);
       } else {
         setProducts([]);
       }
 
     } catch (err) {
+
       console.error("Discovery error:", err);
+      setProducts([]);
+
+    } finally {
+
+      setLoading(false); // ✅ ALWAYS RUN
+
     }
 
-    setLoading(false);
   }
 
   useEffect(() => {
-    if (token) loadDiscovery();
-  }, [token]);
+    loadDiscovery();
+  }, [user]);
 
   /* ===============================
      IMPORT PRODUCT
   =============================== */
 
   async function importProduct(product) {
+
     try {
+
+      const token = await user.getIdToken();
+
       const res = await fetch(
         `${API}/api/admin/discovery/import`,
         {
@@ -72,7 +99,19 @@ export default function ProductDiscovery() {
         }
       );
 
-      const data = await res.json();
+      let data = null;
+
+      try {
+        data = await res.json();
+      } catch {
+        alert("Server error");
+        return;
+      }
+
+      if (!res.ok) {
+        alert(data?.error || "Import failed");
+        return;
+      }
 
       if (data.success) {
         alert("Product imported successfully");
@@ -81,11 +120,13 @@ export default function ProductDiscovery() {
 
     } catch (err) {
       console.error("Import error:", err);
+      alert("Import failed");
     }
+
   }
 
   /* ===============================
-     OPPORTUNITY COLOR
+     UI (UNCHANGED)
   =============================== */
 
   function scoreColor(score) {
@@ -93,10 +134,6 @@ export default function ProductDiscovery() {
     if (score >= 5) return "text-yellow-400";
     return "text-red-400";
   }
-
-  /* ===============================
-     TREND BADGES
-  =============================== */
 
   function badge(product) {
 
@@ -145,12 +182,12 @@ export default function ProductDiscovery() {
         )}
 
         {!loading && products.length > 0 && (
+
           <div className="overflow-x-auto border border-cyan-500/20 rounded-xl">
 
             <table className="min-w-full text-sm">
 
               <thead className="bg-cyan-500/10 text-cyan-300">
-
                 <tr>
                   <th className="p-3 text-left">Product</th>
                   <th className="p-3 text-left">Price</th>
@@ -162,7 +199,6 @@ export default function ProductDiscovery() {
                   <th className="p-3 text-left">Opportunity</th>
                   <th className="p-3 text-left">Action</th>
                 </tr>
-
               </thead>
 
               <tbody>
@@ -178,47 +214,24 @@ export default function ProductDiscovery() {
                       {badge(p)}
                     </td>
 
-                    <td className="p-3 text-white">
-                      ₹{p.price}
-                    </td>
+                    <td className="p-3 text-white">₹{p.price}</td>
+                    <td className="p-3 text-white">{p.stock}</td>
+                    <td className="p-3 text-white">{p.supplier}</td>
+                    <td className="p-3 text-white">{p.trendScore}</td>
+                    <td className="p-3 text-white">{p.demandScore}</td>
+                    <td className="p-3 text-white">{p.marginScore}</td>
 
-                    <td className="p-3 text-white">
-                      {p.stock}
-                    </td>
-
-                    <td className="p-3 text-white">
-                      {p.supplier}
-                    </td>
-
-                    <td className="p-3 text-white">
-                      {p.trendScore}
-                    </td>
-
-                    <td className="p-3 text-white">
-                      {p.demandScore}
-                    </td>
-
-                    <td className="p-3 text-white">
-                      {p.marginScore}
-                    </td>
-
-                    <td
-                      className={`p-3 font-bold ${scoreColor(
-                        p.opportunityScore
-                      )}`}
-                    >
+                    <td className={`p-3 font-bold ${scoreColor(p.opportunityScore)}`}>
                       {p.opportunityScore}
                     </td>
 
                     <td className="p-3">
-
                       <button
                         onClick={() => importProduct(p)}
                         className="bg-cyan-500 hover:bg-cyan-600 px-3 py-1 rounded text-xs"
                       >
                         Import
                       </button>
-
                     </td>
 
                   </tr>
@@ -229,6 +242,7 @@ export default function ProductDiscovery() {
             </table>
 
           </div>
+
         )}
 
       </div>

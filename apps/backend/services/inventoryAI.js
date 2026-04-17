@@ -5,55 +5,88 @@ import Product from "../models/Product.js";
 ====================================================== */
 
 export async function inventoryInsights() {
-  try {
-    const products = await Product.find().lean();
 
-    const alerts = [];
-    const seen = new Set();
+try{
 
-    for (const p of products) {
-      if (!p.slug) continue;
+const products = await Product.find().lean();
 
-      /* ===============================
-         REMOVE DUPLICATES
-      =============================== */
+const alerts = [];
+const seen = new Set();
 
-      if (seen.has(p.slug)) continue;
-      seen.add(p.slug);
+for(const p of products){
 
-      const stock = p.stock ?? 0;
+if(!p.slug) continue;
 
-      /* ===============================
-         ALERT CONDITIONS
-      =============================== */
+/* ===============================
+REMOVE DUPLICATES
+=============================== */
 
-      if (stock <= 5) {
-        alerts.push({
-          productId: p._id,
-          productName: p.name,
-          status: "LOW_STOCK",
-          stock,
-        });
-      }
+if(seen.has(p.slug)) continue;
+seen.add(p.slug);
 
-      if (stock > 200) {
-        alerts.push({
-          productId: p._id,
-          productName: p.name,
-          status: "OVERSTOCK",
-          stock,
-        });
-      }
-    }
+const stock = p.stock ?? 0;
 
-    /* ===============================
-       LIMIT RESULTS
-    =============================== */
+/* ===============================
+LOW STOCK
+=============================== */
 
-    return alerts.slice(0, 5);
+if(stock <= 5){
 
-  } catch (err) {
-    console.error("Inventory AI error:", err);
-    return [];
-  }
+alerts.push({
+
+productId: p._id,
+productName: p.name,
+
+status: "LOW_STOCK",
+stock,
+
+/* AI SIGNALS */
+
+stockRisk: "high",
+suggestedQuantity: 50
+
+});
+
+}
+
+/* ===============================
+OVERSTOCK
+=============================== */
+
+if(stock > 200){
+
+alerts.push({
+
+productId: p._id,
+productName: p.name,
+
+status: "OVERSTOCK",
+stock,
+
+/* AI SIGNALS */
+
+stockRisk: "low",
+suggestedQuantity: 0
+
+});
+
+}
+
+}
+
+/* ===============================
+LIMIT RESULTS
+=============================== */
+
+return alerts.slice(0,5);
+
+}
+catch(err){
+
+console.error("Inventory AI error:",err);
+
+return [];
+
+}
+
 }

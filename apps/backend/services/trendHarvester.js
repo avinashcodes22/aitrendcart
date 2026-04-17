@@ -1,119 +1,163 @@
 import TrendProduct from "../models/TrendProduct.js";
 import AiDecision from "../models/AiDecision.js";
+import { validateDecisionRisk } from "./aiDecisionRiskGuard.js";
 
 /* ====================================
-   SIMULATED TREND SOURCES
+SIMULATED TREND SOURCES
 ==================================== */
 
 const sampleTrends = [
 
-  {
-    name:"LED Sneakers",
-    source:"tiktok",
-    keywords:["led shoes","glow shoes"]
-  },
+{
+name:"LED Sneakers",
+source:"tiktok",
+keywords:["led shoes","glow shoes"]
+},
 
-  {
-    name:"Anime Hoodies",
-    source:"pinterest",
-    keywords:["anime hoodie","streetwear anime"]
-  },
+{
+name:"Anime Hoodies",
+source:"pinterest",
+keywords:["anime hoodie","streetwear anime"]
+},
 
-  {
-    name:"RGB Gaming Desk",
-    source:"google",
-    keywords:["rgb desk setup","gaming desk"]
-  }
+{
+name:"RGB Gaming Desk",
+source:"google",
+keywords:["rgb desk setup","gaming desk"]
+}
 
 ];
 
 /* ====================================
-   TREND HARVESTER ENGINE
+TREND HARVESTER ENGINE
 ==================================== */
 
 export async function harvestTrends(){
 
-  console.log("🌐 Harvesting trends...");
+console.log("🌐 Harvesting trends...");
 
-  let created = 0;
+let created = 0;
 
-  for(const t of sampleTrends){
+for(const t of sampleTrends){
 
-    try{
+try{
 
-      /* --------------------------------
-         DUPLICATE PROTECTION
-      -------------------------------- */
+const exists = await TrendProduct.findOne({
+name:t.name
+});
 
-      const exists = await TrendProduct.findOne({
-        name:t.name
-      });
+if(exists){
+console.log("⚠ Trend already exists:",t.name);
+continue;
+}
 
-      if(exists){
+/* ===============================
+GENERATE SCORE
+=============================== */
 
-        console.log("⚠ Trend already exists:",t.name);
-        continue;
+const score =
+Math.floor(Math.random()*40)+60;
 
-      }
+/* ===============================
+STORE TREND
+=============================== */
 
-      /* --------------------------------
-         CREATE TREND RECORD
-      -------------------------------- */
+const trend = await TrendProduct.create({
 
-      const score = Math.floor(Math.random()*100);
+name:t.name,
+source:t.source,
+keywords:t.keywords,
+score
 
-      const trend = await TrendProduct.create({
+});
 
-        name:t.name,
-        source:t.source,
-        keywords:t.keywords,
-        score
+console.log("📈 Trend stored:",trend.name);
 
-      });
+/* ===============================
+PREPARE DECISION
+=============================== */
 
-      console.log("📈 Trend stored:",trend.name);
+const draftDecision = {
 
-      /* --------------------------------
-         CREATE AI DECISION
-         (ADMIN MUST APPROVE)
-      -------------------------------- */
+type:"TREND_PRODUCT",
 
-      await AiDecision.create({
+entity:"trend",
 
-        type:"TREND_PRODUCT",
+entityId:trend._id.toString(),
 
-        entity:"TREND_PRODUCT",
+suggestion:{
+productName:trend.name,
+source:trend.source,
+keywords:trend.keywords,
+score
+},
 
-        entityId:trend._id.toString(),
+reason:`Trending product detected from ${trend.source}`
 
-        suggestion:{
-          name:trend.name,
-          source:trend.source,
-          keywords:trend.keywords,
-          score
-        },
+};
 
-        reason:`Trending product detected from ${trend.source}`
+/* ===============================
+RISK GUARD
+=============================== */
 
-      });
+const risk =
+await validateDecisionRisk(draftDecision);
 
-      console.log("🤖 AI decision created for:",trend.name);
+if(!risk.valid){
 
-      created++;
+console.log(
+"⚠ Trend decision blocked:",
+risk.reason
+);
 
-    }
-    catch(err){
+continue;
 
-      console.error("Trend processing error:",t.name,err.message);
+}
 
-    }
+/* ===============================
+PREVENT DUPLICATES
+=============================== */
 
-  }
+await AiDecision.findOneAndUpdate(
 
-  console.log(`✅ Trend harvesting finished. ${created} new trends found.`);
+{
+type:"TREND_PRODUCT",
+entityId:trend._id.toString(),
+status:"pending"
+},
 
-  return {
-    trendsCreated:created
-  };
+draftDecision,
+
+{
+new:true,
+upsert:true
+}
+
+);
+
+console.log("🤖 AI decision created:",trend.name);
+
+created++;
+
+}
+catch(err){
+
+console.error(
+"Trend processing error:",
+t.name,
+err.message
+);
+
+}
+
+}
+
+console.log(
+`✅ Trend harvesting finished. ${created} new trends found.`
+);
+
+return {
+trendsCreated:created
+};
 
 }

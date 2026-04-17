@@ -8,11 +8,22 @@ process.env.NEXT_PUBLIC_API_BASE_URL ||
 
 export default function AIStrategy(){
 
-const {token} = useAuth();
+const { user } = useAuth(); // ✅ FIXED
 
 const [data,setData] = useState(null);
+const [error,setError] = useState(null);
+
+/* ===============================
+   LOAD DATA
+================================ */
 
 async function load(){
+
+if (!user) return;
+
+try {
+
+const token = await user.getIdToken(); // ✅ FIXED
 
 const res = await fetch(
 `${API}/api/admin/ai-strategy`,
@@ -23,19 +34,47 @@ Authorization:`Bearer ${token}`
 }
 );
 
+if (!res.ok) {
+  const text = await res.text();
+  console.error("AI strategy error:", text);
+  setError("Failed to load AI strategy");
+  return;
+}
+
 const d = await res.json();
 
 setData(d);
+
+} catch (err) {
+
+console.error("AI strategy load error:", err);
+setError("Server error");
+
+}
 
 }
 
 useEffect(()=>{
 
-if(token){
 load();
-}
 
-},[token]);
+},[user]);
+
+/* ===============================
+   UI (UNCHANGED)
+================================ */
+
+if(error){
+
+return(
+<AdminLayout>
+<p className="p-6 text-red-400">
+{error}
+</p>
+</AdminLayout>
+);
+
+}
 
 if(!data){
 
@@ -66,7 +105,7 @@ Pending AI Decisions
 </p>
 
 <p className="text-2xl font-bold text-yellow-400">
-{data.pendingDecisions}
+{data.pendingDecisions ?? 0}
 </p>
 
 </div>
@@ -78,7 +117,7 @@ Approved Decisions
 </p>
 
 <p className="text-2xl font-bold text-green-400">
-{data.approvedDecisions}
+{data.approvedDecisions ?? 0}
 </p>
 
 </div>
@@ -90,7 +129,7 @@ Rejected Decisions
 </p>
 
 <p className="text-2xl font-bold text-red-400">
-{data.rejectedDecisions}
+{data.rejectedDecisions ?? 0}
 </p>
 
 </div>
@@ -103,7 +142,7 @@ Recent AI Executions
 
 <div className="bg-black/40 rounded-xl p-4">
 
-{data.recentAIExecutions.map((e,i)=>(
+{data.recentAIExecutions?.map((e,i)=>(
 
 <div
 key={i}

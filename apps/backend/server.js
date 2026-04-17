@@ -7,17 +7,17 @@ import http from "http";
 import { Server } from "socket.io";
 
 /* ===============================
-   LOAD ENV
+LOAD ENV
 ================================ */
 dotenv.config();
 
 /* ===============================
-   EXPRESS APP
+EXPRESS APP
 ================================ */
 const app = express();
 
 /* ===============================
-   SECURITY HEADERS
+SECURITY HEADERS
 ================================ */
 app.use(
   helmet({
@@ -26,7 +26,7 @@ app.use(
 );
 
 /* ===============================
-   CORS
+CORS
 ================================ */
 app.use(
   cors({
@@ -36,27 +36,21 @@ app.use(
 );
 
 /* ===============================
-   BODY PARSER
+BODY PARSER
 ================================ */
 app.use(express.json());
 
 /* ===============================
-   DATABASE
-================================ */
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) =>
-    console.error("❌ MongoDB error:", err.message)
-  );
-
-/* ===============================
-   SOCKET.IO
+SOCKET.IO
 ================================ */
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: "http://localhost:3000" },
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
 app.set("io", io);
@@ -67,16 +61,23 @@ io.on("connection", () => {
 });
 
 /* ===============================
-   SCHEDULERS
+SCHEDULERS
 ================================ */
 import "./services/backupScheduler.js";
 import "./services/trendScheduler.js";
 import { startAIScheduler } from "./services/aiScheduler.js";
+import { acquireSchedulerLock } from "./services/schedulerLock.js";
+import { registerAIEvents } from "./services/aiEventRegistry.js";
+import { startAutoActionCron } from "./cron/autoActionCron.js";
+import { startPerformanceCron } from "./cron/performanceCron.js";
+
+/* 🔥 NEW: SUPPLIER CRON */
+import { startSupplierRefreshCron } from "./cron/supplierRefreshCron.js";
 
 /* ===============================
-   IMPORT ROUTES
+IMPORT ROUTES
 ================================ */
-
+import adminOrdersRoutes from "./routes/adminOrders.js";
 import productRoutes from "./routes/products.js";
 import cartRoutes from "./routes/cart.js";
 import orderRoutes from "./routes/orders.js";
@@ -88,9 +89,14 @@ import supplierRoutes from "./routes/suppliers.js";
 import aiRoutes from "./routes/ai.js";
 import tryonRoutes from "./routes/tryon.js";
 import licenseRoutes from "./routes/license.js";
+import adminJobControl from "./routes/adminJobControl.js";
+import supplierPerformance from "./routes/adminSupplierPerformance.js";
 
-/* Admin */
-
+/* ===============================
+ADMIN ROUTES
+================================ */
+import adminAnalytics from "./routes/adminAnalytics.js";
+import adminProductInsight from "./routes/adminProductInsight.js";
 import adminDiscovery from "./routes/adminDiscovery.js";
 import adminWorkerStatus from "./routes/adminWorkerStatus.js";
 import adminBackup from "./routes/adminBackup.js";
@@ -138,155 +144,162 @@ import adminProductBundling from "./routes/adminProductBundling.js";
 import adminPersonalShoppingAI from "./routes/adminPersonalShoppingAI.js";
 import adminAIStrategy from "./routes/adminAIStrategy.js";
 import adminInvestorMode from "./routes/adminInvestorMode.js";
-/* ===============================
-   RATE LIMITERS
-================================ */
+import aiExecution from "./routes/aiExecution.js";
+import settingsRoutes from "./routes/settings.js";
 
+/* ===============================
+RATE LIMITERS
+================================ */
 import {
   publicLimiter,
   adminLimiter,
 } from "./middlewares/rateLimit.js";
 
 /* ===============================
-   PUBLIC ROUTES
+ROUTES (REGISTERED AFTER DB)
 ================================ */
 
-app.use("/api/products", publicLimiter, productRoutes);
-app.use("/api/cart", cartRoutes);
-app.use("/api/orders", orderRoutes);
-app.use("/api/admin", adminAIOperations);
-app.use("/api/checkout", checkoutRoutes);
-app.use("/api/payments", paymentsRoutes);
-app.use("/api/visual-search", visualSearch);
-app.use("/api/recommend", recommend);
-app.use("/api/tryon", tryonRoutes);
+function registerRoutes() {
 
-/* ===============================
-   ADMIN AI ROUTES
-================================ */
+  /* PUBLIC */
+  app.use("/api/admin", adminAiInsights);
+  app.use("/api/products", publicLimiter, productRoutes);
+  app.use("/api/cart", cartRoutes);
+  app.use("/api/orders", orderRoutes);
+  app.use("/api/admin", adminAIOperations);
+  app.use("/api/checkout", checkoutRoutes);
+  app.use("/api/payments", paymentsRoutes);
+  app.use("/api/visual-search", visualSearch);
+  app.use("/api/recommend", recommend);
+  app.use("/api/tryon", tryonRoutes);
+  app.use("/api/admin/jobs", adminLimiter, adminJobControl);
+  app.use("/api/admin", adminAIHealth);
 
-app.use("/api/admin", adminGrowthStrategy);
-app.use("/api/admin", adminInvestorMode);
-app.use("/api/admin", adminAIStrategy);
-app.use("/api/admin", adminPersonalShoppingAI);
-app.use("/api/admin", adminProductBundling);
-app.use("/api/admin", adminPricingOptimizer);
-app.use("/api/admin", adminGlobalExpansion);
-app.use("/api/admin", adminAIHealth);
-app.use("/api/admin", adminDiscoveryImport);
-app.use("/api/admin", adminCompetitorIntel);
-app.use("/api/admin", adminCustomerBehavior);
-app.use("/api/admin", adminDemandForecast);
-app.use("/api/admin", adminStoreManager);
-app.use("/api/admin", adminViralPredictor);
-app.use("/api/admin", adminGrowthAI);
-app.use("/api/admin", adminTrendScanner);
-app.use("/api/admin", adminMarketingAI);
-app.use("/api/admin", adminSupplierAI);
-app.use("/api/admin", adminCustomerAI);
-app.use("/api/admin", adminAiDecisions);
-app.use("/api/admin", adminRevenueInsights);
-app.use("/api/admin", adminWorkerControl);
-app.use("/api/admin", adminAiActions);
-app.use("/api/admin", adminCustomerAnalytics);
-app.use("/api/admin", adminEmailAI);
-app.use("/api/admin", adminAdsAI);
-app.use("/api/admin", adminRestockExecute);
-app.use("/api/admin", adminPricingExecute);
-app.use("/api/admin", adminInventory);
-app.use("/api/admin", adminPricing);
-app.use("/api/admin", adminRestock);
-app.use("/api/admin", adminDiscovery);
-app.use("/api/admin", adminAiInsights);
-app.use("/api/admin", adminAuditLogs);
-app.use("/api/admin", adminWorkerStatus);
-app.use("/api/admin", adminBackup);
-app.use("/api/admin", adminTrendsHarvest);
-app.use("/api/admin", adminSupplierFinder);
-app.use("/api/admin", adminPricingAI);
+  /* ADMIN */
+  app.use("/api/admin", adminAnalytics);
+  app.use("/api/admin", adminOrdersRoutes);
+  app.use("/api/admin", settingsRoutes);
+  app.use("/api/admin", aiExecution);
+  app.use("/api/admin", adminGrowthStrategy);
+  app.use("/api/admin", adminInvestorMode);
+  app.use("/api/admin", adminAIStrategy);
+  app.use("/api/admin", adminPersonalShoppingAI);
+  app.use("/api/admin", adminProductBundling);
+  app.use("/api/admin", adminPricingOptimizer);
+  app.use("/api/admin", adminGlobalExpansion);
+  app.use("/api/admin", adminDiscoveryImport);
+  app.use("/api/admin", adminCompetitorIntel);
+  app.use("/api/admin", adminCustomerBehavior);
+  app.use("/api/admin", adminDemandForecast);
+  app.use("/api/admin", adminStoreManager);
+  app.use("/api/admin", adminViralPredictor);
+  app.use("/api/admin", adminGrowthAI);
+  app.use("/api/admin", adminTrendScanner);
+  app.use("/api/admin", adminMarketingAI);
+  app.use("/api/admin", adminSupplierAI);
+  app.use("/api/admin", adminCustomerAI);
+  app.use("/api/admin", adminAiDecisions);
+  app.use("/api/admin", adminRevenueInsights);
+  app.use("/api/admin", adminWorkerControl);
+  app.use("/api/admin", adminAiActions);
+  app.use("/api/admin", adminCustomerAnalytics);
+  app.use("/api/admin", adminEmailAI);
+  app.use("/api/admin", adminAdsAI);
+  app.use("/api/admin", adminRestockExecute);
+  app.use("/api/admin", adminPricingExecute);
+  app.use("/api/admin", adminInventory);
+  app.use("/api/admin", adminPricing);
+  app.use("/api/admin", adminRestock);
+  app.use("/api/admin", adminDiscovery);
+  app.use("/api/admin", adminAiInsights);
+  app.use("/api/admin", adminAuditLogs);
+  app.use("/api/admin", adminWorkerStatus);
+  app.use("/api/admin", adminBackup);
+  app.use("/api/admin", adminTrendsHarvest);
+  app.use("/api/admin", adminSupplierFinder);
+  app.use("/api/admin", adminPricingAI);
+  app.use("/api/license", licenseRoutes);
 
-/* ===============================
-   ADMIN CORE ROUTES
-================================ */
+  /* CORE */
+  app.use("/api/admin/products", adminProducts);
+  app.use("/api/admin/stats", adminLimiter, adminStats);
+  app.use("/api/admin/trends", adminLimiter, adminTrends);
+  app.use("/api/admin/predictions", adminLimiter, adminPredictions);
+  app.use("/api/admin/notifications", adminLimiter, adminNotifications);
+  app.use("/api/admin/suppliers-graph", adminLimiter, adminSuppliersGraph);
+  app.use("/api/admin/supplier-performance", supplierPerformance);
+  app.use("/api/admin/product-insight", adminProductInsight);
+  app.use("/api/admin/ai", adminLimiter, adminAiRoutes);
 
-app.use("/api/admin/products", adminProducts);
-app.use("/api/admin/stats", adminLimiter, adminStats);
-app.use("/api/admin/trends", adminLimiter, adminTrends);
-app.use("/api/admin/predictions", adminLimiter, adminPredictions);
-app.use("/api/admin/notifications", adminLimiter, adminNotifications);
-app.use("/api/admin/suppliers-graph", adminLimiter, adminSuppliersGraph);
-app.use("/api/admin/ai", adminLimiter, adminAiRoutes);
+  /* OTHER */
+  app.use("/api/suppliers", adminLimiter, supplierRoutes);
+  app.use("/api/ai", adminLimiter, aiRoutes);
 
-/* ===============================
-   SUPPLIER + AI
-================================ */
+  app.use("/uploads", express.static("uploads"));
 
-app.use("/api/suppliers", adminLimiter, supplierRoutes);
-app.use("/api/ai", adminLimiter, aiRoutes);
-app.use("/api/license", adminLimiter, licenseRoutes);
-
-/* ===============================
-   STATIC FILES
-================================ */
-
-app.use("/uploads", express.static("uploads"));
-
-/* ===============================
-   HEALTH CHECK
-================================ */
-
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    db: mongoose.connection.readyState,
-    uptime: process.uptime(),
-  });
-});
-
-/* ===============================
-   TEST ALERTS
-================================ */
-
-app.get("/test-alert", (req, res) => {
-
-  const io = app.get("io");
-
-  io.emit("security_alert", {
-    type: "ORDER_SPIKE",
-    message: "🚨 Test security alert",
-    createdAt: new Date()
+  app.get("/api/health", (req, res) => {
+    res.json({
+      ok: true,
+      db: mongoose.connection.readyState,
+      dbName: mongoose.connection.name,
+      uptime: process.uptime(),
+    });
   });
 
-  res.send("Alert sent");
-
-});
-
-app.get("/test-notify", (req,res)=>{
-
-  const io = app.get("io");
-
-  io.emit("admin_notification",{
-    type:"system",
-    message:"🔔 Test notification",
-    createdAt:new Date()
-  });
-
-  res.send("Notification sent");
-
-});
+}
 
 /* ===============================
-   START SERVER
+START SERVER
 ================================ */
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
+async function startServer() {
 
-  console.log(`🚀 Backend running on http://localhost:${PORT}`);
+  try {
 
-  /* START AI AUTOMATION */
+    await mongoose.connect(process.env.MONGO_URI);
 
-  startAIScheduler();
+    console.log("✅ MongoDB connected");
+    console.log("🔥 DB NAME:", mongoose.connection.name);
 
-});
+    registerRoutes();
+
+    server.listen(PORT, async () => {
+
+      console.log(`🚀 Backend running on http://localhost:${PORT}`);
+
+      /* ===============================
+         EXISTING AI SYSTEM
+      =============================== */
+
+      const lock = await acquireSchedulerLock();
+
+      if (lock) {
+        startAIScheduler();
+      }
+
+      registerAIEvents();
+
+      /* ===============================
+         🔥 NEW: SUPPLIER CRON START
+      =============================== */
+
+      startSupplierRefreshCron();
+
+      startAutoActionCron();
+
+      startPerformanceCron();
+
+    });
+
+  } catch (err) {
+
+    console.error("❌ MongoDB connection failed:", err);
+    process.exit(1);
+
+  }
+
+}
+
+startServer();

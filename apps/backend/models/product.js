@@ -1,107 +1,213 @@
 import mongoose from "mongoose";
 
 const ProductSchema = new mongoose.Schema(
-  {
-    /* ──────────────────────────────
-       URL + Supplier Mapping
-    ────────────────────────────── */
+{
+/* ==============================
+URL + Supplier Mapping
+============================== */
 
-    // SEO friendly URL like /product/meesho-1
-    slug: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      index: true,
-    },
+slug: {
+type: String,
+required: true,
+unique: true,
+lowercase: true,
+index: true
+},
 
-    supplier: { type: String, required: true },
+supplier: {
+type: String,
+required: true,
+index: true
+},
 
-    // Supplier SKU / external ID
-    productId: { type: String, required: true },
+productId: {
+type: String,
+required: true,
+index: true
+},
 
-    name: { type: String, required: true },
+name: {
+type: String,
+required: true,
+text: true
+},
 
-    /* ──────────────────────────────
-       Core Product Info
-    ────────────────────────────── */
+/* ==============================
+Core Product Info
+============================== */
 
-    price: { type: Number, default: 0 },
+price: {
+type: Number,
+default: 0,
+index: true
+},
 
-    // Multiple product images
-    images: [{ type: String }],
+images: [{
+type: String
+}],
 
-    stock: { type: Number, default: 0 },
+stock: {
+type: Number,
+default: 0
+},
 
-    category: { type: String, default: "Misc" },
+category: {
+type: String,
+default: "Misc",
+index: true
+},
 
-    sourceUrl: { type: String, default: "" },
+sourceUrl: {
+type: String,
+default: ""
+},
 
-    /* ──────────────────────────────
-       AI / 3D Conversion
-    ────────────────────────────── */
+/* ==============================
+🔥 NEW — AI BUSINESS METRICS
+============================== */
 
-    model3dUrl: { type: String, default: "" }, // GLB URL
-    modelUsdzUrl: { type: String, default: "" }, // iOS AR
+revenue: {
+type: Number,
+default: 0
+},
 
-    conversionStatus: {
-      type: String,
-      enum: ["none", "pending", "generated", "error"],
-      default: "none",
-    },
+profit: {
+type: Number,
+default: 0
+},
 
-    conversionMode: {
-      type: String,
-      enum: ["preview", "hq", "none"],
-      default: "none",
-    },
+unitsSold: {
+type: Number,
+default: 0
+},
 
-    /* ──────────────────────────────
-       AR Permission Control
-    ────────────────────────────── */
+aiPerformance: {
+score: { type: Number, default: 0 },
+status: {
+type: String,
+enum: ["scaling","stable","dropping"],
+default: "stable"
+},
+lastEvaluatedAt: Date
+},
 
-    isARAllowed: { type: Boolean, default: false },
-    isRestricted: { type: Boolean, default: false },
+/* ==============================
+AI / 3D Conversion
+============================== */
 
-    arViews: { type: Number, default: 0 },
-    arPurchases: { type: Number, default: 0 },
+model3dUrl: {
+type: String,
+default: ""
+},
 
-    /* ──────────────────────────────
-       License / Copyright Safety
-    ────────────────────────────── */
+modelUsdzUrl: {
+type: String,
+default: ""
+},
 
-    licenseStatus: {
-      type: String,
-      enum: ["unknown", "flagged", "verified"],
-      default: "unknown",
-    },
+conversionStatus: {
+type: String,
+enum: ["none","queued","pending","generated","error"],
+default: "none",
+index: true
+},
 
-    licenseReportId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "LicenseReport",
-      default: null,
-    },
+conversionMode: {
+type: String,
+enum: ["preview","hq","none"],
+default: "none"
+},
 
-    /* Optional future use */
-    arEnabled: { type: Boolean, default: true },
-  },
-  { timestamps: true }
+aiGeneratedAt: {
+type: Date
+},
+
+aiWorker: {
+type: String,
+default: ""
+},
+
+/* ==============================
+AR Permission Control
+============================== */
+
+isARAllowed: {
+type: Boolean,
+default: false,
+index: true
+},
+
+isRestricted: {
+type: Boolean,
+default: false
+},
+
+arViews: {
+type: Number,
+default: 0
+},
+
+arPurchases: {
+type: Number,
+default: 0
+},
+
+/* ==============================
+License / Copyright Safety
+============================== */
+
+licenseStatus: {
+type: String,
+enum: ["unknown","flagged","verified"],
+default: "unknown",
+index: true
+},
+
+licenseReportId: {
+type: mongoose.Schema.Types.ObjectId,
+ref: "LicenseReport",
+default: null
+},
+
+/* ==============================
+Analytics
+============================== */
+
+views: {
+type: Number,
+default: 0
+},
+
+purchases: {
+type: Number,
+default: 0
+},
+
+arEnabled: {
+type: Boolean,
+default: true
+}
+
+},
+{ timestamps: true }
 );
 
-/* ──────────────────────────────
-   AUTO-GENERATE SLUG IF MISSING
-────────────────────────────── */
-
-ProductSchema.pre("validate", function (next) {
-  if (!this.slug && this.productId) {
-    this.slug = this.productId
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-  }
-  next();
+/* AUTO SLUG */
+ProductSchema.pre("validate", function(next) {
+if (!this.slug && this.productId) {
+this.slug = this.productId
+.toLowerCase()
+.replace(/[^a-z0-9]+/g,"-")
+.replace(/^-|-$/g,"");
+}
+next();
 });
 
-/* Prevent model overwrite on hot reload */
+/* INDEX */
+ProductSchema.index(
+{ supplier:1, productId:1 },
+{ unique:true }
+);
+
 export default mongoose.models.Product ||
-  mongoose.model("Product", ProductSchema);
+mongoose.model("Product", ProductSchema);

@@ -1,25 +1,34 @@
 import AIError from "../models/AIError.js";
 
-export async function logAIError(engine,error){
+/* ====================================
+   MAIN ERROR LOGGER
+==================================== */
 
-  try{
+export async function logAiError(engine, error) {
+
+  try {
 
     await AIError.create({
 
       engine,
-      message:error.message,
-      stack:error.stack,
-      severity:"error"
+      message: error?.message || "Unknown AI error",
+      stack: error?.stack || "",
+      severity: "error"
 
     });
 
-    console.error("🚨 AI Error Logged:",engine,error.message);
+    console.error("🚨 AI Error Logged:", engine, error?.message);
 
-  }
-  catch(e){
+  } catch (e) {
 
-    console.error("AI error logger failed:",e.message);
+    console.error("AI error logger failed:", e.message);
 
   }
 
 }
+
+/* ====================================
+   BACKWARD COMPATIBILITY
+==================================== */
+
+export const logAIError = logAiError;

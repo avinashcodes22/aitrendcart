@@ -2,138 +2,156 @@ import AiDecision from "../models/AiDecision.js";
 import Product from "../models/Product.js";
 
 /* =====================================================
-   AI DECISION RISK GUARD
-   Protects system from dangerous AI suggestions
+AI DECISION RISK GUARD
 ===================================================== */
 
 export async function validateDecisionRisk(decision){
 
-  try{
+try{
 
-    switch(decision.type){
+switch(decision.type){
 
-      /* =========================================
-         PRICE UPDATE VALIDATION
-      ========================================= */
+/* =========================================
+PRICE VALIDATION
+========================================= */
 
-      case "PRICE_UPDATE":
-      case "PRICE_INCREASE":
-      case "PRICE_DISCOUNT":
+case "PRICE_UPDATE":
+case "PRICE_INCREASE":
+case "PRICE_DISCOUNT":
 
-        const product = await Product.findById(decision.entityId);
+const product = await Product.findById(
+decision.entityId
+);
 
-        if(!product){
-          return reject("Product not found");
-        }
+if(!product){
+return reject("Product not found");
+}
 
-        const oldPrice = product.price;
-        const newPrice = decision.suggestion?.newPrice;
+const oldPrice = product.price;
+const newPrice = decision.suggestion?.newPrice;
 
-        if(!newPrice){
-          return reject("Missing new price");
-        }
+if(newPrice === undefined || newPrice === null){
+return reject("Missing new price");
+}
 
-        const changePercent =
-          Math.abs(newPrice - oldPrice) / oldPrice;
+if(newPrice <= 0){
+return reject("Invalid price value");
+}
 
-        if(changePercent > 0.5){
+if(oldPrice <= 0){
+return reject("Invalid product base price");
+}
 
-          return reject(
-            "Price change exceeds 50%"
-          );
+const changePercent =
+Math.abs(newPrice - oldPrice) / oldPrice;
 
-        }
+if(changePercent > 0.5){
 
-        break;
+return reject(
+"Price change exceeds 50%"
+);
 
-      /* =========================================
-         RESTOCK VALIDATION
-      ========================================= */
+}
 
-      case "STORE_RESTOCK":
+break;
 
-        const qty = decision.suggestion?.suggestedQuantity;
+/* =========================================
+RESTOCK VALIDATION
+========================================= */
 
-        if(!qty){
-          return reject("Missing restock quantity");
-        }
+case "STORE_RESTOCK":
 
-        if(qty > 5000){
+const qty =
+decision.suggestion?.suggestedQuantity;
 
-          return reject(
-            "Restock quantity too large"
-          );
+if(!qty){
+return reject("Missing restock quantity");
+}
 
-        }
+if(qty <= 0){
+return reject("Invalid restock quantity");
+}
 
-        break;
+if(qty > 5000){
 
-      /* =========================================
-         TREND PRODUCT VALIDATION
-      ========================================= */
+return reject(
+"Restock quantity too large"
+);
 
-      case "TREND_PRODUCT":
+}
 
-        if(!decision.suggestion?.productName){
+break;
 
-          return reject(
-            "Trend product missing name"
-          );
+/* =========================================
+TREND PRODUCT VALIDATION
+========================================= */
 
-        }
+case "TREND_PRODUCT":
 
-        break;
+if(!decision.suggestion?.productName){
 
-    }
+return reject(
+"Trend product missing name"
+);
 
-    /* =========================================
-       DUPLICATE DECISION CHECK
-    ========================================= */
+}
 
-    const existing = await AiDecision.findOne({
-      type:decision.type,
-      entityId:decision.entityId,
-      status:"pending"
-    });
+break;
 
-    if(existing){
+}
 
-      return reject(
-        "Duplicate pending decision"
-      );
+/* =========================================
+DUPLICATE DECISION CHECK
+========================================= */
 
-    }
+const existing = await AiDecision.findOne({
+type:decision.type,
+entityId:decision.entityId,
+status:{ $in:["pending","approved"] }
+});
 
-    return {
-      valid:true
-    };
+if(existing){
 
-  }
-  catch(err){
+return reject(
+"Duplicate active decision"
+);
 
-    console.error(
-      "AI Risk Guard error:",
-      err.message
-    );
+}
 
-    return {
-      valid:false,
-      reason:"Risk guard failure"
-    };
+/* =========================================
+PASS VALIDATION
+========================================= */
 
-  }
+return {
+valid:true
+};
+
+}
+catch(err){
+
+console.error(
+"AI Risk Guard error:",
+err.message
+);
+
+return {
+valid:false,
+reason:"Risk guard failure"
+};
+
+}
 
 }
 
 /* =====================================================
-   REJECT HELPER
+REJECT HELPER
 ===================================================== */
 
 function reject(reason){
 
-  return {
-    valid:false,
-    reason
-  };
+return {
+valid:false,
+reason
+};
 
 }

@@ -1,9 +1,10 @@
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import AiDecision from "../models/AiDecision.js";
+import mongoose from "mongoose";
 
 /* ====================================
-   CUSTOMER BEHAVIOR ENGINE
+   CUSTOMER BEHAVIOR ENGINE (FIXED)
 ==================================== */
 
 export async function runCustomerBehavior(){
@@ -50,6 +51,12 @@ export async function runCustomerBehavior(){
   for(const [productId,data] of sorted){
 
     try{
+
+      /* 🔥 FIX: VALIDATE ObjectId */
+      if(!mongoose.Types.ObjectId.isValid(productId)){
+        console.log("⚠ Skipping invalid productId:", productId);
+        continue;
+      }
 
       const product = await Product.findById(productId);
 

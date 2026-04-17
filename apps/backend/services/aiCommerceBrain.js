@@ -5,185 +5,248 @@ import { logAiError } from "./aiErrorLogger.js";
 import { recordAiPerformance } from "./aiPerformanceMonitor.js";
 
 /* ==========================================================
-   AI COMMERCE BRAIN
-   Central intelligence layer for AItrendcart
+AI COMMERCE BRAIN
 ========================================================== */
 
-export async function runCommerceBrain(signals) {
+export async function runCommerceBrain(signals = {}) {
 
-  const start = Date.now();
+const start = Date.now();
 
-  try {
+try {
 
-    const decisions = [];
+const decisions = [];
 
-    const {
-      trends = [],
-      demand = [],
-      pricing = [],
-      inventory = []
-    } = signals;
+const {
+  trends = [],
+  demand = [],
+  pricing = [],
+  inventory = []
+} = signals;
 
-    /* =====================================================
-       TREND → PRODUCT OPPORTUNITY
-    ===================================================== */
+/* =====================================================
+   TREND SIGNALS
+===================================================== */
 
-    for (const trend of trends) {
+for (const trend of trends) {
 
-      const score = calculateTrendScore(trend, demand);
+  const score =
+    calculateTrendScore(trend, demand);
 
-      if (score < 0.6) continue;
+  if (score < 0.6) continue;
 
-      const draftDecision = {
-        type: "TREND_PRODUCT",
-        entity: "trend",
-        suggestion: {
-          productName: trend.productName,
-          category: trend.category,
-          score
-        },
-        reason: "AI Commerce Brain detected strong trend signal"
-      };
+  const draftDecision = {
 
-      const validated = await processDecision(draftDecision);
+    type: "TREND_PRODUCT",
 
-      if (validated) decisions.push(validated);
+    entity: "trend",
 
-    }
+    suggestion: {
+      productName: trend.productName,
+      category: trend.category,
+      score
+    },
 
-    /* =====================================================
-       PRICING OPPORTUNITIES
-    ===================================================== */
+    reason:
+      "AI Commerce Brain detected strong trend signal"
 
-    for (const priceSignal of pricing) {
+  };
 
-      if (!priceSignal.productId) continue;
+  const validated =
+    await processDecision(draftDecision);
 
-      const draftDecision = {
+  if (validated) decisions.push(validated);
 
-        type: "PRICE_UPDATE",
-        entity: "product",
-        entityId: priceSignal.productId,
-        suggestion: {
-          newPrice: priceSignal.newPrice
-        },
-        reason: "AI Commerce Brain optimized pricing"
+}
 
-      };
+/* =====================================================
+   PRICING SIGNALS
+===================================================== */
 
-      const validated = await processDecision(draftDecision);
+for (const priceSignal of pricing) {
 
-      if (validated) decisions.push(validated);
+  if (!priceSignal.productId) continue;
 
-    }
+  const draftDecision = {
 
-    /* =====================================================
-       INVENTORY RESTOCK SIGNALS
-    ===================================================== */
+    type: "PRICE_UPDATE",
 
-    for (const inv of inventory) {
+    entity: "product",
 
-      if (!inv.productId) continue;
+    entityId: priceSignal.productId,
 
-      if (inv.stockRisk !== "high") continue;
+    suggestion: {
+      newPrice: priceSignal.newPrice
+    },
 
-      const draftDecision = {
+    reason:
+      "AI Commerce Brain optimized pricing"
 
-        type: "STORE_RESTOCK",
-        entity: "product",
-        entityId: inv.productId,
-        suggestion: {
-          suggestedQuantity: inv.suggestedQuantity || 50
-        },
-        reason: "AI Commerce Brain detected inventory risk"
+  };
 
-      };
+  const validated =
+    await processDecision(draftDecision);
 
-      const validated = await processDecision(draftDecision);
+  if (validated) decisions.push(validated);
 
-      if (validated) decisions.push(validated);
+}
 
-    }
+/* =====================================================
+   INVENTORY SIGNALS
+===================================================== */
 
-    /* =====================================================
-       FINAL SAFETY GUARD
-    ===================================================== */
+for (const inv of inventory) {
 
-    await aiSafetyGuard(decisions);
+  if (!inv.productId) continue;
 
-    /* =====================================================
-       PERFORMANCE METRICS
-    ===================================================== */
+  if (inv.stockRisk !== "high") continue;
 
-    await recordAiPerformance({
-      engine: "AI_COMMERCE_BRAIN",
-      decisionsCreated: decisions.length,
-      executionTime: Date.now() - start
-    });
+  const draftDecision = {
 
-    return decisions;
+    type: "STORE_RESTOCK",
 
-  }
-  catch (err) {
+    entity: "product",
 
-    await logAiError({
-      engine: "AI_COMMERCE_BRAIN",
-      message: err.message
-    });
+    entityId: inv.productId,
 
-    throw err;
+    suggestion: {
+      suggestedQuantity:
+        inv.suggestedQuantity || 50
+    },
 
-  }
+    reason:
+      "AI Commerce Brain detected inventory risk"
+
+  };
+
+  const validated =
+    await processDecision(draftDecision);
+
+  if (validated) decisions.push(validated);
+
+}
+
+/* =====================================================
+   SAFETY GUARD
+===================================================== */
+
+await aiSafetyGuard(decisions);
+
+/* =====================================================
+   PERFORMANCE LOG
+===================================================== */
+
+await recordAiPerformance({
+
+  engine: "AI_COMMERCE_BRAIN",
+
+  decisionsCreated: decisions.length,
+
+  executionTime:
+    Date.now() - start
+
+});
+
+return decisions;
+
+}
+catch (err) {
+
+await logAiError({
+
+  engine: "AI_COMMERCE_BRAIN",
+
+  message: err.message
+
+});
+
+throw err;
+
+}
 
 }
 
 /* ==========================================================
-   PROCESS DECISION
-   Risk Guard → Save Decision
+PROCESS DECISION
 ========================================================== */
 
-async function processDecision(draftDecision){
+async function processDecision(draftDecision) {
 
-  const risk = await validateDecisionRisk(draftDecision);
+const risk =
+await validateDecisionRisk(draftDecision);
 
-  if (!risk.valid) {
+if (!risk.valid) {
 
-    console.log("⚠ Decision blocked by Risk Guard:", risk.reason);
+console.log(
+  "⚠ Decision blocked by Risk Guard:",
+  risk.reason
+);
 
-    return null;
+return null;
 
+}
+
+/* Prevent duplicate decisions */
+
+const decision =
+await AiDecision.findOneAndUpdate(
+
+  {
+    type: draftDecision.type,
+    entityId: draftDecision.entityId,
+    status: "pending"
+  },
+
+  draftDecision,
+
+  {
+    new: true,
+    upsert: true
   }
 
-  const decision = await AiDecision.create(draftDecision);
+);
 
-  return decision;
+return decision;
 
 }
 
 /* ==========================================================
-   TREND SCORING
+TREND SCORING
 ========================================================== */
 
-function calculateTrendScore(trend, demandSignals) {
+function calculateTrendScore(
+trend,
+demandSignals
+) {
 
-  let score = 0;
+let score = 0;
 
-  if (trend.viralScore) {
-    score += trend.viralScore * 0.4;
-  }
+if (trend.viralScore) {
+score += trend.viralScore * 0.4;
+}
 
-  const demandSignal = demandSignals.find(
-    d => d.productName === trend.productName
-  );
+const demandSignal =
+demandSignals.find(
+d =>
+d.productName ===
+trend.productName
+);
 
-  if (demandSignal) {
-    score += demandSignal.demandScore * 0.4;
-  }
+if (demandSignal) {
 
-  if (trend.socialMentions) {
-    score += Math.min(trend.socialMentions / 10000, 0.2);
-  }
+score +=
+  demandSignal.demandScore * 0.4;
 
-  return Math.min(score, 1);
+}
+
+if (trend.socialMentions) {
+
+score += Math.min(
+  trend.socialMentions / 10000,
+  0.2
+);
+
+}
+
+return Math.min(score, 1);
 
 }

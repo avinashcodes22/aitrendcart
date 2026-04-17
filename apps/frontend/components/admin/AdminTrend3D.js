@@ -1,217 +1,222 @@
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Html } from "@react-three/drei";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import AIProductPanel from "./AIProductPanel";
 
-/* ======================================================
-   CONFIG
-====================================================== */
-const API =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://localhost:5000";
+const API = "http://localhost:5000";
 
-/* ======================================================
-   SIZE SCALE
-====================================================== */
-function getSize(sales) {
-  return Math.log(sales + 1) * 1.5 + 0.9;
-}
-
-/* ======================================================
-   COLOR SCALE
-====================================================== */
-function getColor(sales) {
-  if (sales >= 15) return "#00ffff";
-  if (sales >= 5) return "#facc15";
-  return "#ff6b6b";
-}
-
-/* ======================================================
-   POSITIONS
-====================================================== */
-function getPositions(trends) {
-  const spacing = 6;
-  return trends.map((_, i) => {
-    const angle = i * 1.6;
-    const radius = spacing * Math.sqrt(i + 1);
-
-    return [
-      Math.cos(angle) * radius,
-      0,
-      Math.sin(angle) * radius,
-    ];
-  });
-}
-
-/* ======================================================
-   BUBBLE
-====================================================== */
-function Bubble({ trend, position, onClick }) {
-  const size = getSize(trend.sales);
-  const color = getColor(trend.sales);
-
-  return (
-    <group position={position}>
-      <mesh onClick={() => onClick(trend)}>
-        <sphereGeometry args={[size, 32, 32]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.7}
-        />
-      </mesh>
-
-      <Html distanceFactor={20}>
-        <div className="bg-black/70 px-2 py-1 rounded text-xs text-white whitespace-nowrap">
-          {trend.name} — {trend.sales}
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-/* ======================================================
-   MAIN COMPONENT
-====================================================== */
 export default function AdminTrend3D() {
-  const { token } = useAuth();
 
-  const [trends, setTrends] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [range, setRange] = useState("30d");   // ⭐ filter state
+  const { user, getFreshToken } = useAuth();
 
-  /* ================= LOAD DATA ================= */
-  async function loadTrends() {
-    if (!token) return;
+  const [data, setData] = useState([]);
+  const [range, setRange] = useState("30d");
+  const [activeIndex, setActiveIndex] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [time, setTime] = useState(0);
 
+  /* 🎬 ANIMATION LOOP */
+  useEffect(() => {
+    let frame;
+    const animate = () => {
+      setTime((t) => t + 0.015);
+      frame = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  /* 📡 LOAD DATA */
+  async function load() {
     try {
+      const token = await getFreshToken();
+      if (!token) return;
+
       const res = await fetch(
         `${API}/api/admin/trends?range=${range}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
-      const data = await res.json();
+      const json = await res.json();
+      setData(json?.trends || []);
 
-      if (!res.ok)
-        throw new Error(data.error || "Failed");
-
-      setTrends(Array.isArray(data) ? data : []);
-      setError("");
     } catch (err) {
-      console.error("Trend fetch error:", err.message);
-      setError("Failed to load trends");
+      console.error("Trend load error:", err);
     }
-
-    setLoading(false);
   }
 
   useEffect(() => {
-    loadTrends();
-  }, [token, range]);   // ⭐ reload when range changes
+    if (user) load();
+  }, [range, user]);
 
-  /* ================= STATES ================= */
-  if (loading)
-    return (
-      <div className="text-white/60 text-center mt-20">
-        Loading trend data...
-      </div>
-    );
+  /* 🧠 SYSTEM SIZE */
+  const count = data.length;
 
-  if (error)
-    return (
-      <div className="text-red-400 text-center mt-20">
-        {error}
-      </div>
-    );
-
-  if (!trends.length)
-    return (
-      <div className="text-white/40 text-center mt-20">
-        No trend data yet
-      </div>
-    );
-
-  const positions = getPositions(trends);
+  const containerHeight =
+    count < 5 ? 420 :
+    count < 10 ? 500 :
+    count < 15 ? 600 :
+    700;
 
   return (
+
     <div className="space-y-4">
 
-      {/* ================= FILTER MENU ================= */}
-      <div className="flex gap-3">
-        {[
-          { label: "Today", val: "today" },
-          { label: "Last 7 Days", val: "7d" },
-          { label: "Last 30 Days", val: "30d" },
-        ].map((btn) => (
+      {/* FILTER */}
+      <div className="flex gap-2">
+        {["today", "7d", "30d"].map((r) => (
           <button
-            key={btn.val}
-            onClick={() => {
-              setLoading(true);
-              setRange(btn.val);
-            }}
-            className={`px-3 py-1 rounded text-sm ${
-              range === btn.val
-                ? "bg-cyan-500"
-                : "bg-gray-700"
+            key={r}
+            onClick={() => setRange(r)}
+            className={`px-3 py-1 rounded ${
+              range === r
+                ? "bg-cyan-500 text-black"
+                : "bg-white/10 text-white"
             }`}
           >
-            {btn.label}
+            {r}
           </button>
         ))}
       </div>
 
-      {/* ================= 3D VIEW ================= */}
-      <Canvas camera={{ position: [0, 8, 25] }}>
-        <ambientLight intensity={0.8} />
-        <pointLight position={[20, 20, 20]} />
+      {/* 🌌 GALAXY */}
+      <div
+        className="relative overflow-hidden rounded-xl border border-cyan-500/10"
+        style={{ height: containerHeight }}
+      >
 
-        {trends.map((t, i) => (
-          <Bubble
+        {/* CORE */}
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 90,
+            height: 90,
+            borderRadius: "50%",
+            background: "rgba(34,211,238,0.15)",
+            boxShadow: "0 0 80px rgba(34,211,238,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 5
+          }}
+        >
+          <span className="text-cyan-300 text-sm font-bold">
+            AI CORE
+          </span>
+        </div>
+
+        {/* ORBITS */}
+        {[70, 120, 170].map((r, i) => (
+          <div
             key={i}
-            trend={t}
-            position={positions[i]}
-            onClick={setSelected}
+            style={{
+              position: "absolute",
+              width: r * 2,
+              height: r * 2,
+              borderRadius: "50%",
+              border: "1px solid rgba(34,211,238,0.08)",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)"
+            }}
           />
         ))}
 
-        <OrbitControls />
-      </Canvas>
+        {/* PLANETS */}
+        {data.map((item, index) => {
 
-      {/* ================= CLICK MODAL ================= */}
-      {selected && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-[#050816] border border-cyan-500/30 rounded-2xl p-6 w-[350px] text-white">
+          const value = item.sales || 1;
 
-            <div className="flex justify-between mb-3">
-              <h2 className="text-cyan-400 font-bold">
-                {selected.name}
-              </h2>
+          /* 🎯 SAFE SIZE */
+          const size = Math.max(35, Math.min(value * 4, 70));
 
-              <button
-                onClick={() => setSelected(null)}
-                className="text-white/60 hover:text-white"
-              >
-                ✕
-              </button>
+          /* 🎯 RING DISTRIBUTION */
+          const total = data.length;
+          const rings = 3;
+          const itemsPerRing = Math.ceil(total / rings);
+
+          const ringIndex = Math.floor(index / itemsPerRing);
+          const positionInRing = index % itemsPerRing;
+
+          /* 🎯 ANGLE */
+          const angle =
+            (positionInRing / itemsPerRing) * Math.PI * 2 +
+            time * (0.2 + ringIndex * 0.05);
+
+          /* 🎯 RADIUS */
+          const baseRadius = 70;
+          const radius = baseRadius + ringIndex * 50;
+
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+
+          const hue = 190 + index * 12;
+          const isActive = activeIndex === index;
+
+          return (
+
+            <div
+              key={index}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+              onClick={() => setSelectedProduct(item)}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: size,
+                height: size,
+                transform: `
+                  translate(-50%, -50%)
+                  translate(${x}px, ${y}px)
+                  scale(${isActive ? 1.2 : 1})
+                `,
+                borderRadius: "50%",
+                background: `
+                  radial-gradient(
+                    circle,
+                    hsla(${hue}, 90%, 65%, 0.95),
+                    hsla(${hue}, 80%, 30%, 0.2)
+                  )
+                `,
+                boxShadow: isActive
+                  ? `0 0 40px hsla(${hue}, 90%, 60%, 0.9)`
+                  : `0 0 15px hsla(${hue}, 90%, 60%, 0.4)`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                zIndex: isActive ? 10 : 1
+              }}
+            >
+
+              <div className="text-white text-xs text-center px-1">
+                <div className="truncate max-w-[70px]">
+                  {item.name}
+                </div>
+                <div>{value}</div>
+              </div>
+
             </div>
 
-            <p className="text-sm text-white/70 mb-3">
-              Sales: {selected.sales}
-            </p>
+          );
 
-            <p className="text-xs text-white/40">
-              Next step → open product page + show 3D model
-            </p>
+        })}
 
-          </div>
-        </div>
+      </div>
+
+      {/* 🧠 AI PANEL */}
+      {selectedProduct && (
+        <AIProductPanel
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+        />
       )}
+
     </div>
   );
 }

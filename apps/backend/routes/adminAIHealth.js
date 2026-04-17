@@ -1,59 +1,87 @@
 import express from "express";
-import AiPerformance from "../models/AiPerformance.js";
+import IORedis from "ioredis";
+import mongoose from "mongoose";
 
 import { verifyToken } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 
 const router = express.Router();
 
+const redis = new IORedis(
+  process.env.REDIS_URL || "redis://127.0.0.1:6379"
+);
+
 /*
 ====================================
-AI HEALTH MONITOR
-GET /api/admin/ai-health
+AI HEALTH (CLEAN + NO SPAM)
 ====================================
 */
 
 router.get(
-"/ai-health",
-verifyToken,
-requireRole("admin"),
-async (req,res)=>{
+  "/ai-health",
+  verifyToken,
+  requireRole("admin"),
+  async (req, res) => {
+    try {
 
-  try{
+      /* =========================
+         DB READY CHECK
+      ========================= */
+      if (mongoose.connection.readyState !== 1) {
+        return res.json({
+          worker: "offline",
+          decisions: 0,
+          failed: 0,
+        });
+      }
 
-    const limit = parseInt(req.query.limit) || 50;
-    const engine = req.query.engine || null;
+      /* =========================
+         LOAD MODEL SAFELY
+      ========================= */
+      const AiPerformance =
+        mongoose.models.AiPerformance ||
+        mongoose.model("AiPerformance");
 
-    const query = {};
+      /* =========================
+         WORKER STATUS (REDIS)
+      ========================= */
+      let workerStatus = "offline";
+      let lastHeartbeat = null;
 
-    if(engine){
-      query.engine = engine;
+      const workerRaw = await redis.get("ai:worker:status");
+
+      if (workerRaw) {
+        const parsed = JSON.parse(workerRaw);
+        workerStatus = parsed.status;
+        lastHeartbeat = parsed.lastHeartbeat;
+      }
+
+      /* =========================
+         STATS
+      ========================= */
+      const totalJobs = await AiPerformance.countDocuments();
+      const failedJobs = await AiPerformance.countDocuments({
+        status: "failed",
+      });
+
+      /* ❌ REMOVED SPAM LOG */
+      // console.log("🔥 TOTAL JOBS:", totalJobs);
+
+      res.json({
+        worker: workerStatus,
+        lastHeartbeat,
+        decisions: totalJobs,
+        failed: failedJobs,
+      });
+
+    } catch (err) {
+      console.error("AI health error:", err);
+
+      res.status(500).json({
+        error: "AI health failed",
+      });
     }
-
-    const logs = await AiPerformance
-      .find(query)
-      .sort({ createdAt:-1 })
-      .limit(limit)
-      .lean();
-
-    res.json({
-      success:true,
-      count:logs.length,
-      logs
-    });
-
   }
-  catch(err){
-
-    console.error("AI health fetch error:",err);
-
-    res.status(500).json({
-      success:false,
-      error:"Failed to load AI health logs"
-    });
-
-  }
-
-});
+);
 
 export default router;

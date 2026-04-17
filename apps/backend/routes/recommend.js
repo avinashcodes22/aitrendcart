@@ -2,31 +2,39 @@ import express from "express";
 import Product from "../models/Product.js";
 import Cart from "../models/Cart.js";
 import Order from "../models/Order.js";
+
 import { verifyToken } from "../middlewares/auth.js";
+
+import { generateRecommendations } from "../services/recommendationEngine.js";
+import { findSimilarProducts } from "../services/productSimilarityEngine.js";
 
 const router = express.Router();
 
 /* =====================================================
-   AI SMART RECOMMENDATIONS (v2)
+   AI SMART RECOMMENDATIONS (v3)
 ===================================================== */
 
 router.get("/", verifyToken, async (req, res) => {
+
   try {
 
     const userId = req.user.uid;
 
     /* ==========================================
-       1️⃣ CART BASED CATEGORY RECOMMENDATIONS
+       1️⃣ CART CATEGORY SIGNALS
     ========================================== */
 
     const cart = await Cart.findOne({ userId });
 
     let category = null;
+    let cartProductId = null;
 
     if (cart && cart.items.length > 0) {
 
+      cartProductId = cart.items[0].productId;
+
       const product = await Product.findById(
-        cart.items[0].productId
+        cartProductId
       );
 
       category = product?.category || null;
@@ -46,11 +54,10 @@ router.get("/", verifyToken, async (req, res) => {
     }
 
     /* ==========================================
-       2️⃣ ORDER BASED RECOMMENDATIONS
-       "Customers also bought"
+       2️⃣ ORDER HISTORY SIGNALS
     ========================================== */
 
-    const orders = await Order.find({ userId });
+    const orders = await Order.find({ userId }).select("items");
 
     const productMap = {};
 
@@ -87,7 +94,35 @@ router.get("/", verifyToken, async (req, res) => {
     }
 
     /* ==========================================
-       3️⃣ TRENDING PRODUCTS FALLBACK
+       3️⃣ FREQUENTLY BOUGHT TOGETHER
+    ========================================== */
+
+    let coPurchase = [];
+
+    if (cartProductId) {
+
+      coPurchase = await generateRecommendations(
+        cartProductId
+      );
+
+    }
+
+    /* ==========================================
+       4️⃣ PRODUCT SIMILARITY
+    ========================================== */
+
+    let similarProducts = [];
+
+    if (cartProductId) {
+
+      similarProducts = await findSimilarProducts(
+        cartProductId
+      );
+
+    }
+
+    /* ==========================================
+       5️⃣ TRENDING FALLBACK
     ========================================== */
 
     const trendingProducts = await Product.find()
@@ -100,15 +135,18 @@ router.get("/", verifyToken, async (req, res) => {
     ========================================== */
 
     const recommendations = [
+
       ...categoryProducts,
       ...orderProducts,
+      ...coPurchase,
+      ...similarProducts,
       ...trendingProducts
+
     ];
 
-    /* remove duplicates */
+    /* REMOVE DUPLICATES */
 
     const unique = [];
-
     const seen = new Set();
 
     for (const p of recommendations) {
@@ -118,12 +156,9 @@ router.get("/", verifyToken, async (req, res) => {
       if (seen.has(id)) continue;
 
       seen.add(id);
-
       unique.push(p);
 
     }
-
-    /* limit final results */
 
     const final = unique.slice(0, 8);
 
@@ -132,15 +167,18 @@ router.get("/", verifyToken, async (req, res) => {
       products: final
     });
 
-  } catch (err) {
+  }
+  catch(err){
 
-    console.error("Recommend error:", err);
+    console.error("Recommendation error:", err);
 
     res.status(500).json({
+      success: false,
       error: "Recommendation failed"
     });
 
   }
+
 });
 
 export default router;

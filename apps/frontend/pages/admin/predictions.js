@@ -8,19 +8,60 @@ const API =
   "http://localhost:5000";
 
 export default function PredictionsPage() {
-  const { token } = useAuth();
+
+  const { user } = useAuth(); // ✅ FIXED
+
   const [data, setData] = useState([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!token) return;
 
-    fetch(`${API}/api/admin/predictions`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then(setData)
-      .catch(console.error);
-  }, [token]);
+    async function load() {
+
+      if (!user) return;
+
+      try {
+
+        const token = await user.getIdToken(); // ✅ FIXED
+
+        const res = await fetch(
+          `${API}/api/admin/predictions`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+          }
+        );
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("Predictions error:", text);
+          setError("Failed to load predictions");
+          return;
+        }
+
+        const json = await res.json();
+
+        /* 🔥 HANDLE MULTIPLE RESPONSE TYPES */
+        const parsed =
+          json?.predictions ||
+          json?.data ||
+          (Array.isArray(json) ? json : []);
+
+        setData(parsed);
+
+      } catch (err) {
+
+        console.error(err);
+        setError("Server error");
+
+      }
+
+    }
+
+    load();
+
+  }, [user]);
 
   return (
     <AdminGuard>
@@ -31,7 +72,11 @@ export default function PredictionsPage() {
             🔮 AI Trend Predictions
           </h1>
 
-          {data.length === 0 && (
+          {error && (
+            <p className="text-red-400">{error}</p>
+          )}
+
+          {!error && data.length === 0 && (
             <p>No prediction data yet</p>
           )}
 
@@ -43,7 +88,7 @@ export default function PredictionsPage() {
               >
                 <div>{p.name}</div>
                 <div className="text-cyan-400">
-                  {p.predictedSales}
+                  {p.predictedSales ?? 0}
                 </div>
               </div>
             ))}

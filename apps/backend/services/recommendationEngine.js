@@ -3,52 +3,83 @@ import Product from "../models/Product.js";
 
 /* =====================================================
    AI RECOMMENDATION ENGINE
+   Frequently bought together products
 ===================================================== */
 
 export async function generateRecommendations(productId){
 
-  /* ======================================
-     FIND ORDERS WITH THIS PRODUCT
-  ====================================== */
+  try{
 
-  const orders = await Order.find({
-    "items.productId": productId
-  });
+    /* ======================================
+       FIND ORDERS WITH THIS PRODUCT
+    ====================================== */
 
-  const relatedMap = {};
+    const orders = await Order.find({
+      "items.productId": productId
+    });
 
-  for(const order of orders){
+    const relatedMap = {};
 
-    for(const item of order.items){
+    for(const order of orders){
 
-      const id = String(item.productId);
+      for(const item of order.items){
 
-      if(id === String(productId)) continue;
+        const id = String(item.productId);
 
-      if(!relatedMap[id]){
-        relatedMap[id] = 0;
+        if(id === String(productId)) continue;
+
+        if(!relatedMap[id]){
+          relatedMap[id] = 0;
+        }
+
+        relatedMap[id] += item.quantity;
+
       }
-
-      relatedMap[id] += item.quantity;
 
     }
 
+    /* ======================================
+       SORT RELATED PRODUCTS BY SCORE
+    ====================================== */
+
+    const sorted = Object.entries(relatedMap)
+      .sort((a,b)=>b[1]-a[1])
+      .slice(0,6);
+
+    const ids = sorted.map(r=>r[0]);
+
+    if(ids.length === 0){
+      return [];
+    }
+
+    /* ======================================
+       FETCH PRODUCTS
+    ====================================== */
+
+    const products = await Product.find({
+      _id:{ $in: ids }
+    });
+
+    /* ======================================
+       RESTORE ORIGINAL ORDER
+       (MongoDB does not guarantee order)
+    ====================================== */
+
+    const orderedProducts = ids
+      .map(id =>
+        products.find(p => String(p._id) === id)
+      )
+      .filter(Boolean);
+
+    return orderedProducts;
+
   }
+  catch(err){
 
-  /* ======================================
-     SORT RELATED PRODUCTS
-  ====================================== */
+    console.error("Recommendation Engine Error:",err);
 
-  const sorted = Object.entries(relatedMap)
-    .sort((a,b)=>b[1]-a[1])
-    .slice(0,6);
+    return [];
 
-  const ids = sorted.map(r=>r[0]);
-
-  const products = await Product.find({
-    _id:{ $in: ids }
-  });
-
-  return products;
+  }
 
 }

@@ -3,14 +3,20 @@ import dynamic from "next/dynamic";
 import { useAuth } from "../../context/AuthContext";
 import AdminGuard from "../../components/admin/AdminGuard";
 import AdminLayout from "../../components/admin/AdminLayout";
+import { productsApi } from "../../lib/api";
 
 const Admin3DViewer = dynamic(
   () => import("../../components/admin/Admin3DViewer"),
   { ssr: false }
 );
 
+const API =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "http://localhost:5000";
+
 export default function AdminProductsPage() {
-  const { token } = useAuth();
+
+  const { user } = useAuth();
 
   const [products, setProducts] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -21,59 +27,92 @@ export default function AdminProductsPage() {
      LOAD PRODUCTS
   =============================== */
   async function loadProducts() {
-    if (!token) return;
 
-    try {
-      const res = await fetch("http://localhost:5000/api/products", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = await res.json();
-
-      if (Array.isArray(data)) {
-        setProducts(data);
-        setError("");
-      } else {
-        setError(data.error || "Failed to load products");
-      }
-    } catch {
-      setError("Backend not reachable");
+    if (!user) {
+      setLoading(false);
+      return;
     }
 
-    setLoading(false);
+    try {
+
+      const data = await productsApi.getAll();
+
+      /* 🔥 HANDLE MULTIPLE FORMATS */
+      const parsed =
+        data?.products ||
+        data?.data ||
+        (Array.isArray(data) ? data : []);
+
+      setProducts(parsed);
+      setError("");
+
+    } catch (err) {
+
+      console.error(err);
+      setError("Backend not reachable");
+
+    } finally {
+
+      setLoading(false);
+
+    }
+
   }
 
   useEffect(() => {
     loadProducts();
-  }, [token]);
+  }, [user]);
 
   /* ===============================
-     TOGGLE AR
+     TOGGLE AR (FIXED)
   =============================== */
   async function toggleAR(id, value) {
-    if (!token) return;
 
     try {
-      await fetch(`http://localhost:5000/api/products/${id}/ar`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ isARAllowed: value }),
-      });
+
+      if (!user) return;
+
+      const token = await user.getIdToken(); // ✅ FIXED
+
+      const res = await fetch(
+        `${API}/api/products/${id}/ar`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}` // ✅ ADDED
+          },
+          body: JSON.stringify({ isARAllowed: value }),
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("AR toggle error:", text);
+        alert("Failed to update AR setting");
+        return;
+      }
 
       loadProducts();
-    } catch {
+
+    } catch (err) {
+
+      console.error(err);
       alert("Failed to update AR setting");
+
     }
+
   }
 
   /* ===============================
      UI
   =============================== */
-  if (loading) return <div className="p-6">Loading products...</div>;
-  if (error) return <div className="p-6 text-red-400">{error}</div>;
+
+  if (loading)
+    return <div className="p-6 text-white">Loading products...</div>;
+
+  if (error)
+    return <div className="p-6 text-red-400">{error}</div>;
 
   return (
     <AdminGuard>
@@ -88,13 +127,12 @@ export default function AdminProductsPage() {
             <p className="text-white/60">No products found</p>
           )}
 
-          {/* ✅ FIXED GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
             {products.map((p) => (
               <div
                 key={p._id}
-                className="bg-black/40 border border-cyan-500/20 p-5 rounded-xl glow-card flex flex-col justify-between"
+                className="bg-black/40 border border-cyan-500/20 p-5 rounded-xl flex flex-col justify-between"
               >
                 <div>
                   <div className="font-semibold text-lg">
@@ -137,16 +175,17 @@ export default function AdminProductsPage() {
                       No 3D Model
                     </span>
                   )}
+
                 </div>
               </div>
             ))}
 
           </div>
 
-          {/* 3D VIEWER MODAL */}
+          {/* 3D VIEWER */}
           {selected && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-              <div className="bg-[#050816] border border-cyan-500/20 rounded-2xl w-full max-w-4xl p-5 glow-card">
+              <div className="bg-[#050816] border border-cyan-500/20 rounded-2xl w-full max-w-4xl p-5">
 
                 <div className="flex justify-between mb-3">
                   <div>

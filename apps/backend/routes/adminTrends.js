@@ -5,46 +5,78 @@ import { requireRole } from "../middlewares/rbac.js";
 
 const router = express.Router();
 
-/* GET /api/admin/trends */
+/* ======================================================
+   GET /api/admin/trends (FINAL)
+====================================================== */
+
 router.get("/", verifyToken, requireRole("admin"), async (req, res) => {
+
+  console.log("🔥 TRENDS API HIT");
+
   try {
+
     const range = req.query.range || "30d";
 
-    const now = new Date();
-    let startDate = new Date(0);
+    let startDate;
 
     if (range === "today") {
-      startDate = new Date(now.setHours(0,0,0,0));
-    }
-    if (range === "7d") {
-      startDate = new Date(Date.now() - 7*86400000);
-    }
-    if (range === "30d") {
-      startDate = new Date(Date.now() - 30*86400000);
+      startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+    } else if (range === "7d") {
+      startDate = new Date(Date.now() - 7 * 86400000);
+    } else {
+      startDate = new Date(Date.now() - 30 * 86400000);
     }
 
-    const trends = await Order.aggregate([
-      { $match: { createdAt: { $gte: startDate } } },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: "$items.name",
-          sales: { $sum: "$items.quantity" }
+    /* ===============================
+       SAFE DATA BUILD
+    =============================== */
+
+    const orders = await Order.find({
+      createdAt: { $gte: startDate }
+    }).lean();
+
+    const map = {};
+
+    for (const o of orders) {
+
+      if (!o.items || !Array.isArray(o.items)) continue;
+
+      for (const item of o.items) {
+
+        if (!item || !item.name) continue;
+
+        if (!map[item.name]) {
+          map[item.name] = 0;
         }
-      },
-      { $sort: { sales: -1 } },
-      { $limit: 10 }
-    ]);
 
-    res.json(trends.map(t => ({
-      name: t._id,
-      sales: t.sales
-    })));
+        map[item.name] += item.quantity || 0;
+
+      }
+
+    }
+
+    const trends = Object.entries(map)
+      .map(([name, sales]) => ({ name, sales }))
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 12);
+
+    res.json({
+      success: true,
+      trends
+    });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Trend load failed" });
+
+    console.error("❌ Trend error:", err);
+
+    res.status(500).json({
+      success: false,
+      trends: []
+    });
+
   }
+
 });
 
 export default router;

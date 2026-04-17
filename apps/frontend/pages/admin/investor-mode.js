@@ -8,11 +8,22 @@ process.env.NEXT_PUBLIC_API_BASE_URL ||
 
 export default function InvestorMode(){
 
-const {token} = useAuth();
+const { user } = useAuth(); // ✅ FIXED
 
 const [data,setData] = useState(null);
+const [error,setError] = useState(null);
+
+/* ===============================
+   LOAD DATA
+================================ */
 
 async function load(){
+
+if (!user) return;
+
+try {
+
+const token = await user.getIdToken(); // ✅ FIXED
 
 const res = await fetch(
 `${API}/api/admin/investor-mode`,
@@ -23,19 +34,47 @@ Authorization:`Bearer ${token}`
 }
 );
 
+if (!res.ok) {
+  const text = await res.text();
+  console.error("Investor mode error:", text);
+  setError("Failed to load investor data");
+  return;
+}
+
 const d = await res.json();
 
 setData(d);
+
+} catch (err) {
+
+console.error("Investor load error:", err);
+setError("Server error");
+
+}
 
 }
 
 useEffect(()=>{
 
-if(token){
 load();
-}
 
-},[token]);
+},[user]);
+
+/* ===============================
+   UI (UNCHANGED)
+================================ */
+
+if(error){
+
+return(
+<AdminLayout>
+<p className="p-6 text-red-400">
+{error}
+</p>
+</AdminLayout>
+);
+
+}
 
 if(!data){
 
@@ -60,75 +99,45 @@ AI Investor Mode
 <div className="grid grid-cols-3 gap-6">
 
 <div className="bg-black/40 p-4 rounded-xl">
-
-<p className="text-white/60">
-Total Revenue
-</p>
-
+<p className="text-white/60">Total Revenue</p>
 <p className="text-2xl font-bold text-green-400">
-₹{data.revenue}
+₹{data.revenue ?? 0}
 </p>
-
 </div>
 
 <div className="bg-black/40 p-4 rounded-xl">
-
-<p className="text-white/60">
-Orders
-</p>
-
+<p className="text-white/60">Orders</p>
 <p className="text-2xl font-bold">
-{data.totalOrders}
+{data.totalOrders ?? 0}
 </p>
-
 </div>
 
 <div className="bg-black/40 p-4 rounded-xl">
-
-<p className="text-white/60">
-Products
-</p>
-
+<p className="text-white/60">Products</p>
 <p className="text-2xl font-bold">
-{data.products}
+{data.products ?? 0}
 </p>
-
 </div>
 
 <div className="bg-black/40 p-4 rounded-xl">
-
-<p className="text-white/60">
-AI Decisions
-</p>
-
+<p className="text-white/60">AI Decisions</p>
 <p className="text-2xl font-bold">
-{data.aiDecisions}
+{data.aiDecisions ?? 0}
 </p>
-
 </div>
 
 <div className="bg-black/40 p-4 rounded-xl">
-
-<p className="text-white/60">
-AI Approved
-</p>
-
+<p className="text-white/60">AI Approved</p>
 <p className="text-2xl font-bold text-green-400">
-{data.aiApproved}
+{data.aiApproved ?? 0}
 </p>
-
 </div>
 
 <div className="bg-black/40 p-4 rounded-xl">
-
-<p className="text-white/60">
-Projected Monthly Revenue
-</p>
-
+<p className="text-white/60">Projected Monthly Revenue</p>
 <p className="text-2xl font-bold text-cyan-400">
-₹{data.projectedMonthlyRevenue}
+₹{data.projectedMonthlyRevenue ?? 0}
 </p>
-
 </div>
 
 </div>

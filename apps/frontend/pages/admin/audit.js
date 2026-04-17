@@ -8,14 +8,21 @@ const API =
 
 export default function AuditPage() {
 
-  const { token } = useAuth();
+  const { user } = useAuth(); // ✅ FIXED
 
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   async function loadLogs() {
 
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try {
+
+      const token = await user.getIdToken(); // ✅ FIXED
 
       const res = await fetch(
         `${API}/api/admin/audit`,
@@ -26,15 +33,25 @@ export default function AuditPage() {
         }
       );
 
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Audit error:", text);
+        setLogs([]);
+        return;
+      }
+
       const data = await res.json();
 
       if (data.success) {
         setLogs(data.logs || []);
+      } else {
+        setLogs([]);
       }
 
     } catch (err) {
 
       console.error("Audit load error:", err);
+      setLogs([]);
 
     }
 
@@ -47,17 +64,17 @@ export default function AuditPage() {
 
   useEffect(() => {
 
-    if (!token) return;
+    if (!user) return;
 
     loadLogs();
 
     const interval = setInterval(() => {
       loadLogs();
-    }, 10000); // refresh every 10 seconds
+    }, 10000);
 
     return () => clearInterval(interval);
 
-  }, [token]);
+  }, [user]);
 
   return (
 
@@ -108,49 +125,35 @@ export default function AuditPage() {
                     className="border-t border-cyan-500/10 hover:bg-cyan-500/5"
                   >
 
-                    {/* ACTION */}
                     <td className="p-3 text-white font-medium">
                       {log.action || "-"}
                     </td>
 
-                    {/* ENTITY */}
                     <td className="p-3 text-white">
-
                       {log.entity ? (
                         <div>
-
-                          <div>
-                            {log.entity}
-                          </div>
-
+                          <div>{log.entity}</div>
                           {log.entityId && (
                             <div className="text-xs text-white/50">
                               {log.entityId}
                             </div>
                           )}
-
                         </div>
                       ) : "-"}
-
                     </td>
 
-                    {/* DETAILS */}
                     <td className="p-3 text-white">
-
                       {log.details ? (
                         <pre className="text-xs whitespace-pre-wrap text-cyan-200">
                           {JSON.stringify(log.details, null, 2)}
                         </pre>
                       ) : "-"}
-
                     </td>
 
-                    {/* IP */}
                     <td className="p-3 text-white">
                       {log.ip || "-"}
                     </td>
 
-                    {/* TIME */}
                     <td className="p-3 text-white/80">
                       {log.createdAt
                         ? new Date(log.createdAt).toLocaleString()

@@ -9,7 +9,10 @@ const OrderSchema = new mongoose.Schema(
         productId: String,
         name: String,
         price: Number,
-        quantity: Number
+        quantity: Number,
+
+        // ✅ NEW (non-breaking)
+        supplier: { type: String, default: "unknown" }
       }
     ],
 
@@ -34,7 +37,6 @@ const OrderSchema = new mongoose.Schema(
     paymentMethod: String,
     paymentDetails: {},
 
-    // Snapshot of address at order time
     address: {
       fullName: String,
       phone: String,

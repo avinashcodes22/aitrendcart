@@ -8,14 +8,25 @@ const API =
 
 export default function AiControlPage(){
 
-  const { token } = useAuth();
+  const { user } = useAuth(); // ✅ FIXED
 
   const [stats,setStats] = useState(null);
   const [loading,setLoading] = useState(true);
 
+  /* ===============================
+     LOAD STATS
+  =============================== */
+
   async function loadStats(){
 
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try{
+
+      const token = await user.getIdToken(); // ✅ FIXED
 
       const res = await fetch(
         `${API}/api/admin/workers`,
@@ -26,59 +37,91 @@ export default function AiControlPage(){
         }
       );
 
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Worker stats error:", text);
+        setStats(null);
+        return;
+      }
+
       const data = await res.json();
 
       if(data.success){
         setStats(data.stats);
+      } else {
+        setStats(null);
       }
 
     }catch(err){
       console.error("Worker stats error:",err);
+      setStats(null);
     }
 
     setLoading(false);
 
   }
 
+  /* ===============================
+     ACTIONS
+  =============================== */
+
   async function pauseWorkers(){
 
-    await fetch(
-      `${API}/api/admin/workers/pause`,
-      {
-        method:"POST",
-        headers:{
-          Authorization:`Bearer ${token}`
-        }
-      }
-    );
+    try {
 
-    loadStats();
+      const token = await user.getIdToken(); // ✅ FIXED
+
+      await fetch(
+        `${API}/api/admin/workers/pause`,
+        {
+          method:"POST",
+          headers:{
+            Authorization:`Bearer ${token}`
+          }
+        }
+      );
+
+      loadStats();
+
+    } catch (err) {
+      console.error("Pause error:", err);
+    }
 
   }
 
   async function resumeWorkers(){
 
-    await fetch(
-      `${API}/api/admin/workers/resume`,
-      {
-        method:"POST",
-        headers:{
-          Authorization:`Bearer ${token}`
-        }
-      }
-    );
+    try {
 
-    loadStats();
+      const token = await user.getIdToken(); // ✅ FIXED
+
+      await fetch(
+        `${API}/api/admin/workers/resume`,
+        {
+          method:"POST",
+          headers:{
+            Authorization:`Bearer ${token}`
+          }
+        }
+      );
+
+      loadStats();
+
+    } catch (err) {
+      console.error("Resume error:", err);
+    }
 
   }
 
   useEffect(()=>{
 
-    if(token){
-      loadStats();
-    }
+    loadStats();
 
-  },[token]);
+  },[user]);
+
+  /* ===============================
+     UI (UNCHANGED)
+  =============================== */
 
   return(
 
@@ -93,6 +136,12 @@ export default function AiControlPage(){
         {loading && (
           <p className="text-white/60">
             Loading worker stats...
+          </p>
+        )}
+
+        {!loading && !stats && (
+          <p className="text-white/60">
+            No worker data available
           </p>
         )}
 
@@ -150,7 +199,7 @@ function Card({title,value}){
       </div>
 
       <div className="text-xl font-bold text-white">
-        {value}
+        {value ?? 0}
       </div>
 
     </div>

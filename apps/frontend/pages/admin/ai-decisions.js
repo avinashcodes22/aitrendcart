@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../context/AuthContext";
+import AIDecisionsPanel from "../../components/admin/AIDecisionsPanel";
 
 const API =
 process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -8,16 +9,26 @@ process.env.NEXT_PUBLIC_API_BASE_URL ||
 
 export default function AiDecisions(){
 
-const { token } = useAuth();
+const { user } = useAuth();
 
 const [decisions,setDecisions] = useState([]);
 const [loading,setLoading] = useState(true);
+const [view,setView] = useState("ai");
 
 /* ===============================
    LOAD DECISIONS
 ================================ */
 
 async function loadDecisions(){
+
+if (!user) {
+  setLoading(false);
+  return;
+}
+
+try {
+
+const token = await user.getIdToken();
 
 const res = await fetch(
 `${API}/api/admin/ai-decisions`,
@@ -28,60 +39,76 @@ Authorization:`Bearer ${token}`
 }
 );
 
+if (!res.ok) {
+  const text = await res.text();
+  console.error("Decisions error:", text);
+  setDecisions([]);
+  return;
+}
+
 const data = await res.json();
 
-setDecisions(data || []);
+const parsed =
+  data?.decisions ||
+  data?.data ||
+  (Array.isArray(data) ? data : []);
+
+setDecisions(parsed);
+
+} catch (err) {
+  console.error("Decision load error:", err);
+  setDecisions([]);
+}
+
 setLoading(false);
 
 }
 
 /* ===============================
-   APPROVE
+   APPROVE / REJECT
 ================================ */
 
 async function approve(id){
+try {
+const token = await user.getIdToken();
 
 await fetch(
 `${API}/api/admin/ai-decisions/${id}/approve`,
 {
 method:"POST",
-headers:{
-Authorization:`Bearer ${token}`
-}
+headers:{ Authorization:`Bearer ${token}` }
 }
 );
 
 loadDecisions();
 
+} catch (err) {
+console.error("Approve error:", err);
+}
 }
 
-/* ===============================
-   REJECT
-================================ */
-
 async function reject(id){
+try {
+const token = await user.getIdToken();
 
 await fetch(
 `${API}/api/admin/ai-decisions/${id}/reject`,
 {
 method:"POST",
-headers:{
-Authorization:`Bearer ${token}`
-}
+headers:{ Authorization:`Bearer ${token}` }
 }
 );
 
 loadDecisions();
 
+} catch (err) {
+console.error("Reject error:", err);
+}
 }
 
 useEffect(()=>{
-
-if(token){
 loadDecisions();
-}
-
-},[token]);
+},[user]);
 
 /* ===============================
    UI
@@ -96,6 +123,56 @@ return(
 <h1 className="text-2xl font-bold text-cyan-400 mb-6">
 AI Decisions
 </h1>
+
+{/* TOGGLE */}
+<div className="flex gap-3 mb-6">
+
+<button
+onClick={()=>setView("ai")}
+className={`px-4 py-2 rounded ${
+view==="ai"
+? "bg-cyan-500 text-black"
+: "bg-white/10 text-white"
+}`}
+>
+AI View
+</button>
+
+<button
+onClick={()=>setView("table")}
+className={`px-4 py-2 rounded ${
+view==="table"
+? "bg-cyan-500 text-black"
+: "bg-white/10 text-white"
+}`}
+>
+Table View
+</button>
+
+</div>
+
+{/* ===============================
+   AI VIEW (FIXED)
+================================ */}
+
+{view==="ai" && (
+
+<AIDecisionsPanel
+decisions={decisions}
+loading={loading}
+onApprove={approve}
+onReject={reject}
+/>
+
+)}
+
+{/* ===============================
+   TABLE VIEW (UNCHANGED)
+================================ */}
+
+{view==="table" && (
+
+<>
 
 {loading && (
 <p className="text-white/60">
@@ -177,6 +254,10 @@ Reject
 </table>
 
 </div>
+
+)}
+
+</>
 
 )}
 
